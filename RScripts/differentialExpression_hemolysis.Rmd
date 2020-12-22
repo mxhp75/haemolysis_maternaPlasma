@@ -1,0 +1,1705 @@
+---
+title: "differentialExpression_hemolysis"
+author: "Melanie Smith"
+date: "22/10/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+    echo = TRUE,
+    message = FALSE,
+    warning = FALSE,
+    cache = FALSE,
+    fig.align = "center",
+    results = "hide"
+)
+
+```
+
+```{r UDF}
+`%notin%` <- Negate(`%in%`)
+# function (x) to count the number of non-zero records in each column (ie per sample)
+nonzero <- function(x) sum(x != 0)
+```
+
+# Load required libraries
+
+```{r loadLibrary}
+
+# tidyverse core packages
+library(tibble)
+library(plyr)
+library(reshape2)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(stringr)
+library(ggplot2)
+library(tidyverse)
+
+# tidyverse-friendly packages
+library(plotly)
+library(ggrepel)
+library(GGally)
+library(tidyHeatmap)
+# library(tidybulk)
+library(magrittr)
+library(ggpubr)
+library(ggalt)
+
+
+library(stringr)
+library(edgeR)
+library(pander)
+library(RColorBrewer)
+library(viridis)
+library(pheatmap)
+library(RUVSeq)
+library(preprocessCore)
+library(dendextend)
+library(sva)
+library(quantro)
+# Compute descriptive statistics
+library(pastecs)
+library(here)
+
+
+```
+
+## Symbolic links
+
+```{r symlinks}
+## create the symbolic data links in R
+# system("ln -s /Users/a1627211/Bioinformatics/github/PhD/placentaPaper_1/rawData/plasmaCounts/counts_hg38 /Users/a1627211/Bioinformatics/github/PhD/haemolysis_maternaPlasma/rawData")
+
+# system("ln -s /Users/a1627211/Bioinformatics/github/PhD/placenta_PE/rawData/plasma/* /Users/a1627211/Bioinformatics/github/PhD/haemolysis_maternaPlasma/rawData/")
+
+# system("ln -s /Users/a1627211/Bioinformatics/github/PhD/placentaPaper_1/cleanData/samples.Rds /Users/a1627211/Bioinformatics/github/PhD/haemolysis_maternaPlasma/cleanData")
+
+# system("ln -s /Users/a1627211/Bioinformatics/github/PhD/placenta_PE/cleanData/simpleMetaData.csv /Users/a1627211/Bioinformatics/github/PhD/haemolysis_maternaPlasma/cleanData")
+
+# system("ln -s /Users/a1627211/Bioinformatics/github/PhD/placenta_PE/rawData/basicMetaData.csv /Users/a1627211/Bioinformatics/github/PhD/haemolysis_maternaPlasma/cleanData")
+```
+
+```{r import umi_tools counts}
+
+# 200609 plasma counts aligned to GRCh38
+
+files <- c("rawData/200609_plasma/NPC_0023_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0027_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0028_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0031_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0032_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0036_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0038_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0039_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0043_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0045_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0047_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0049_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0052_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0054_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0055_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0056_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0060_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0062_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0063_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0067_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0068_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0070_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0076_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0077_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0019_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0068_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0092_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0094_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0101_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0106_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0110_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0113_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0121_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0125_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0126_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0128_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0130_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0135_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0137_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0141_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0148_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0183_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0186_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0191_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0193_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0196_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0198_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0200_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0202_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0203_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0204_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0208_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0211_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0214_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0215_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0219_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0221_P.R1_deduplicated_mir_counts.tsv")
+
+# test
+read.delim(files[1], nrow=5)
+
+# establish DGEList object - all batches
+DGE_import_200609 <- readDGE(files, columns=c(1,2))
+
+# tidy up sample names
+samplename <- sub("_P.R1_deduplicated_mir_counts", "",colnames(DGE_import_200609$counts))
+samplename <- sub("rawData\\/200609_plasma\\/", "",samplename)
+samplename <- sub("_", "",samplename)
+colnames(DGE_import_200609) <- samplename
+
+counts_200609 <- DGE_import_200609$counts
+    
+genes <- rownames(counts_200609)
+
+```
+
+# Import sample data
+
+```{r import sample metadata}
+
+simpleMetaData <- read_csv(here("cleanData/simpleMetaData.csv")) %>% 
+  dplyr::select(., samplename, gestationalAge = gestationPlus)
+
+basicMetadata <- read_csv(here("cleanData/basicMetadata.csv")) %>% 
+  subset(., samplename %in% colnames(counts_200609)) %>% 
+    as.data.frame() %>% 
+  dplyr::select(., samplename, CohortCode, simpleOutcome, maternalAge, BMI, smoker = Smoking.Status, fetal_sex = Fetal.Sex, ethnicity = Ethnicity) %>% 
+  left_join(., simpleMetaData, by = "samplename") %>% 
+  dplyr::mutate(., processGroup = "groupC")
+basicMetadata$gestationalAge[is.na(basicMetadata$gestationalAge)] <- 0
+
+
+basicMetaData <- read_csv(here("cleanData/basicMetaData.csv"))
+
+
+```
+
+# Import PAC plasma counts data
+
+```{r import PAC plasma}
+
+files_PAC <- c("rawData/counts_hg38/PAC0006_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0056_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0007_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0057_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0008_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0058_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0009_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0059_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0010_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0060_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0011_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0062_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0012_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0063_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0013_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0064_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0014_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0065_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0015_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0069_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0016_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0070_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0017_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0071_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0018_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0072_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0020_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0074_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0021_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0075_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0022_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0076_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0023_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0077_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0024_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0078_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0025_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0083_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0026_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0084_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0027_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0086_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0029_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0087_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0030_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0088_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0031_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0091_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0032_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0093_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0033_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0097_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0034_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0098_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0035_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0099_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0036_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0100_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0037_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0102_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0038_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0103_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0039_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0105_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0040_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0107_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0041_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0108_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0042_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0109_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0043_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0111_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0044_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0114_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0045_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0117_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0046_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0118_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0047_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0120_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0048_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0122_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0049_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0124_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0050_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0127_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0051_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0129_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0052_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0131_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0053_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0134_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0054_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0139_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0055_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0140_deduplicated_mir_counts.tsv")
+
+# test
+read.delim(files_PAC[1], nrow=5)
+
+# establish DGEList object - all batches
+DGE_import_PAC <- readDGE(files_PAC, columns=c(1,2))
+
+# tidy up sample names
+samplename <- sub("rawData\\/counts_hg38\\/", "",colnames(DGE_import_PAC$counts))
+samplename <- sub("_deduplicated_mir_counts", "",samplename)
+colnames(DGE_import_PAC) <- samplename
+
+counts_PAC <- DGE_import_PAC$counts
+    
+genes_PAC <- rownames(DGE_import_PAC)
+
+samples_PAC <- readRDS(here("cleanData/samples.Rds")) %>% 
+  dplyr::mutate(., simpleOutcome = "unkown") %>%
+  dplyr::mutate(., CohortCode = "PAC") %>% 
+  dplyr::select(., samplename, CohortCode, simpleOutcome, maternalAge, BMI, smoker, fetal_sex = updatedFetalSex, ethnicity, gestationalAge = gestationPlus, processGroup)
+samples_PAC$gestationalAge <- gsub("\\+", "", samples_PAC$gestationalAge)
+
+```
+
+## Import haemolysis test results
+
+```{r import haemolysis results}
+
+raw_cq_180111 <- read_csv(here("cleanData/raw_Cq_values_QC10137.csv"),
+                     col_names = TRUE) %>%
+  dplyr::select(order(colnames(.)))
+
+raw_cq_200609 <- read_csv(here("cleanData/raw_Cq_values_QNS30165.csv"),
+                     col_names = TRUE) %>%
+  dplyr::select(order(colnames(.)))
+
+combined_raw_cq <- rbind(raw_cq_180111, raw_cq_200609) %>% 
+  dplyr::select(., samplename, everything())
+
+```
+
+# combine counts & metadata
+
+```{r combine counts and metadata}
+
+# combine counts
+expression <- full_join(as.data.frame(counts_200609) %>% 
+                               tibble::rownames_to_column("miRNA"),
+                             as.data.frame(counts_PAC) %>% 
+                               tibble::rownames_to_column("miRNA"),
+                             by = "miRNA") %>% 
+  tibble::column_to_rownames("miRNA") %>% 
+  as.matrix()
+# replace and NAs introduced with a zero
+expression[is.na(expression)] <- 0
+# ensure the columns are ordered by assending sample name
+expression <- expression[,order(colnames(expression),decreasing=FALSE)]
+
+# combined metadata
+combined_samples <- rbind(samples_PAC, basicMetadata) %>% 
+  arrange(., samplename)
+
+## Fix up columns were names aren't consistent between metadata sheets
+combined_samples$simpleOutcome <- as.character(combined_samples$simpleOutcome)
+combined_samples$simpleOutcome[which(combined_samples$simpleOutcome == "unkown")] = "Unknown"
+
+combined_samples$fetal_sex <- as.character(combined_samples$fetal_sex)
+combined_samples$fetal_sex[which(combined_samples$fetal_sex == "M")] = "XY"
+combined_samples$fetal_sex[which(combined_samples$fetal_sex == "F")] = "XX"
+
+## Make sure the factors are as I want them
+combined_samples$fetal_sex <- factor(combined_samples$fetal_sex, c("notPreg", "XX", "XY"))
+combined_samples$processGroup <- factor(combined_samples$processGroup, c("groupA", "groupB", "groupC"))
+
+# Add the delta Cq results to the sample metadata
+
+combined_samples <- left_join(combined_samples, combined_raw_cq, by = "samplename")
+
+miRNA_per_sample <- data.frame(t(numcolwise(nonzero)(as.data.frame(expression)))) %>%
+  tibble::rownames_to_column() %>%
+  set_colnames(., c("samplename", "unique_miRs")) %>%
+  arrange(., desc(unique_miRs)) %>%
+  mutate(., uniqueRank = 1:nrow(combined_samples))
+
+# quick scatterplot of counts
+ggplot(data = as.data.frame(colSums(expression)) %>% 
+         tibble::rownames_to_column() %>%
+         set_colnames(c("samplename", "sampleSum")) %>%
+         left_join(., combined_samples, by = "samplename") %>%
+         dplyr::select(., samplename, sampleSum)) +
+  geom_point(aes(x = samplename, y = sampleSum, colour = combined_samples$processGroup)) +
+  geom_hline(yintercept = 1000000) +
+  theme_bw() +
+  ggtitle("Raw library size - plasma counts") +
+  theme(axis.text.x = element_text(angle = 270, hjust = 1))
+
+
+```
+
+## Add haemolysis results to sample metadata
+- QIAGEN: PAC0033, PAC0034, PAC0041, PAC0048, PAC0050, PAC0051, PAC0054, PAC0056, PAC0062, PAC0084 and PAC0105 (PAC0022 = exhausted sample)
+- QIAGEN_200609: PAC0121, PAC0068, PAC0110
+
+```{r add hemolysis to metadata}
+
+combined_samples <- combined_samples %>% 
+  dplyr::mutate(., haemolysis = ifelse(samplename %in% c("PAC0033", "PAC0034", "PAC0041", "PAC0048", "PAC0050", "PAC0051", "PAC0054", "PAC0056", "PAC0062", "PAC0084", "PAC0105", "PAC0121", "PAC0068", "PAC0110"), "haemolysed",
+                                        ifelse(samplename %notin% c("PAC0033", "PAC0034", "PAC0041", "PAC0048", "PAC0050", "PAC0051", "PAC0054", "PAC0056", "PAC0062", "PAC0084", "PAC0105", "PAC0121", "PAC0068", "PAC0110"), "none", NA)))
+
+combined_samples$haemolysis <- factor(combined_samples$haemolysis, c("none", "haemolysed"))
+```
+
+## Remove PAC0022 - no haemolysis data
+
+```{r}
+
+# remove PAC0022 - no haemolysis data
+expression <- as.data.frame(expression) %>% 
+  dplyr::select(., -PAC0022)
+
+# subset the metadata to only include samples that remain in the expression data
+combined_samples <- subset(combined_samples, samplename %notin% "PAC0022")
+
+```
+
+## Remove sample with < 1 million reads
+
+```{r remove small libraries}
+
+# identify samples with < 1 million reads
+lowCounts <- names(expression[, colSums(expression) < 1000000])
+
+# remove columns/samples with readcouns less than 1 million
+expression <- expression[, colSums(expression) > 1000000]
+
+# subset the metadata to only include samples that remain in the expression data
+combined_samples <- subset(combined_samples, samplename %in% colnames(expression))
+
+```
+
+# Filter sequencing noise   
+
+* Here any individual observation with less than five counts is considered to be sequencing noise and is reduced to zero and removed by filtering.  
+  * Counts less than 5 reduced to 0
+  * Logic check and record how many miRs will be filtered
+  * Filter to remove miRs with zero counts in all samples
+
+```{r filterSeqNoise}
+
+# reduce any individual count less than five to zero
+expression[expression < 5] <- 0
+# check to establish if any miRNA have no expression across all samples
+table(rowSums(expression == 0) == ncol(expression))
+  
+# remove miRNAs with zero counts in all samples
+expression <- expression[ rowSums(expression)!=0, ]
+
+is.na(expression) %>% table()
+
+```
+
+# MDS Plots   
+
+The multidimensional scaling plots create a temp. log fold change between pairs.   
+Here we see that the Leading logFC on dimension 1 seperates the samples by batch indicating the need for batch correction.
+
+```{r rawMDS}
+
+# basic MDS plot
+plotMDS(expression)
+title(main = "Plasma: Multi Dimensional Scaling Plot \n(raw data)")
+
+## Colour options
+# 1. colour by processGatch
+col.processGroup <- combined_samples$processGroup
+levels(col.processGroup) <- brewer.pal(nlevels(col.processGroup), "Set1")
+col.processGroup <- as.character(col.processGroup)
+
+# plot
+plotMDS(expression, dim.plot = c(1,2), 
+        labels = combined_samples$samplename,
+        col = col.processGroup, 
+        pch = 20, cex = 1.8)
+legend("bottomright",
+       legend = levels(combined_samples$processGroup), 
+       pch = 20,
+       col = col.processGroup,
+       ncol = 1,
+       cex = 1.1)
+title(main = "Plasma: Multi Dimensional Scaling Plot \n(raw data)")
+
+# 2. colour by haemolysis
+col.hemo <- combined_samples$haemolysis
+levels(col.hemo) <- brewer.pal(nlevels(col.hemo), "Set2")
+col.hemo <- as.character(col.hemo)
+
+# plot
+plotMDS(expression, dim.plot = c(1,2), 
+        labels = combined_samples$samplename,
+        col = col.hemo, 
+        pch = 20, cex = 1.8)
+legend("bottomright",
+       legend = levels(combined_samples$haemolysis), 
+       pch = 20,
+       col = col.hemo,
+       ncol = 1,
+       cex = 1.1)
+title(main = "Plasma: Multi Dimensional Scaling Plot \n(raw data)")
+
+
+```
+
+## Plot # unique miRs as a function of depth
+
+```{r library size versus depth}
+
+# start with a bit of exploration
+# rank the samples by read counts and by unique miRs
+rank <- as.data.frame(colSums(expression)) %>%
+  set_colnames(., "readCounts") %>% 
+                arrange(., -(readCounts)) %>% 
+  tibble::rownames_to_column("samplename") %>% 
+  left_join(., combined_samples, by = "samplename") %>% 
+  dplyr::select(., samplename, readCounts, haemolysis) %>% 
+  dplyr::mutate(., rank_readCounts = 1:nrow(.)) %>% 
+  full_join(.,
+            as.data.frame(t(numcolwise(nonzero)(as.data.frame(expression)))) %>%
+              tibble::rownames_to_column() %>%
+              set_colnames(., c("samplename", "unique_miRs")) %>%
+              arrange(., desc(unique_miRs)) %>%
+              mutate(., rank_unique = 1:nrow(.)),
+            by = "samplename")
+  
+# and now lets see which miRNA are added incrementally when we increase the reads
+# first we need to re-order the columns by readCounts - highest to lowest.
+temp <- rownames(as.data.frame(expression[,rank$samplename]) %>% dplyr::na_if(., 0) %>% filter(., !is.na(.[,1])))
+
+```
+
+# Establish DGEList
+
+```{r DGElist}
+
+genes <- rownames(expression) %>% 
+  as.data.frame() %>% 
+  set_colnames("SYMBOL")
+
+DGElist_plasma <- DGEList(counts = expression,
+                          samples = combined_samples,
+                          genes = genes)
+
+is.na(DGElist_plasma$counts) %>% table()
+
+```
+
+# TMM normalisation of libraries
+
+Before differential expression analysis the sample libraries need to be normalised to account for differences in initial library size.     
+Normalising the libraries allows for the direct comparison between samples.   
+Here the Trimmed Mean of M Values method is used.   
+
+```{r TMM}
+
+# Plot the distribution of (low count filtered) counts prior to normalisation 
+nsamples <- ncol(DGElist_plasma)
+# set up colours for the density plots
+col <- colorRampPalette(brewer.pal(11,"Spectral"))(ncol(DGElist_plasma))
+lcpm <- cpm(DGElist_plasma, log = TRUE)
+boxplot(lcpm, las = 2, col = col, main = "")
+title(main = "DGElist_plasma: Un-normalised data (n=153)",ylab = "Log-cpm") 
+
+# calculate normalisation factors and apply to the DGEList object
+DGElist_plasma <- calcNormFactors(DGElist_plasma, method = "TMM")
+
+```
+
+# Filter biological noise and plot
+ 
+```{r filter bionoise}
+
+# calculate the cpm value of a read count of 40 given the mean library size (to be used in keep.genes)
+cpm(40, mean(DGElist_plasma$samples$lib.size))
+
+# new df of unfiltered cpm for the reduced DGEList
+rawCpm_plasma <- cpm(DGElist_plasma, log = FALSE)
+
+# new df of unfiltered log 2 cpm for the reduced DGEList
+rawlcpm_plasma <- cpm(DGElist_plasma, log = TRUE)
+
+## The density of log-CPM values for pre-filtered data 
+# (A) and post-filtered data 
+# (B) are shown for each sample. 
+## Dotted vertical lines mark the log-CPM of 1 threshold 
+# (equivalent to a CPM value of 2) used in the filtering step.
+nsamples <- ncol(DGElist_plasma)
+
+par(mfrow=c(1,1))
+
+# colour by haemolysis
+col.hemo <- DGElist_plasma$samples$haemolysis
+levels(col.hemo) <- brewer.pal(nlevels(col.hemo), "Set2")
+col.hemo <- as.character(col.hemo)
+
+plot(density(rawlcpm_plasma[,1]), col = col.hemo[1], lwd = 2, ylim = c(0, 0.80), las = 2,
+  main = "", xlab = "")
+title(main = "DGEList_plasma Unfiltered data", xlab = "Log-cpm") 
+abline(v = 1, lty = 3)
+for (i in 1:nsamples){
+  den <- density(rawlcpm_plasma[,i])
+  lines(den$x, den$y, col = col.hemo[i], lwd = 2)
+}
+
+# remove low expressed genes
+keep.exprs <- rowSums(rawCpm_plasma > 40) >= 12
+DGElist_plasma <- DGElist_plasma[keep.exprs,, keep.lib.sizes = FALSE]
+
+filtered_lcpm <- cpm(DGElist_plasma, log=TRUE)
+
+plot(density(filtered_lcpm[,1]), col = col.hemo[1], lwd = 2, ylim = c(0, 0.20), las = 2,
+  main = "", xlab = "")
+title(main = "DGEList_plasma Filtered data (20cpm)", xlab = "Log-cpm") 
+abline(v = 1, lty = 3)
+for (i in 1:nsamples){
+  den <- density(filtered_lcpm[,i])
+lines(den$x, den$y, col = col.hemo[i], lwd = 2)
+}
+
+par(mfrow=c(1,1))
+# Distribution of normalised and filtered counts data
+boxplot(cpm(DGElist_plasma, log = TRUE), las = 2, col = col, main = "")
+title(main = "DGEList_plasma: Normalised data",ylab = "Log-cpm")
+```
+
+## MDS of filtered and TMM normalised counts
+
+```{r mdsRaw}
+
+# calculate MDS data
+MDS <- plotMDS(DGElist_plasma, main = "MDS norm counts")
+
+# pull out x and y
+x <- MDS$x
+y <- MDS$y  
+
+# plot with ggplot
+cbind(x, y) %>% 
+  as.data.frame() %>% 
+  tibble::rownames_to_column("samplename") %>% 
+  full_join(., DGElist_plasma$samples, by = "samplename") %>% 
+  ggplot() +
+  geom_point(aes(x = x,
+                 y = y,
+                 colour = haemolysis,
+                 size = 6)) +
+  geom_text(aes(x = x,
+                y = y,
+                label = samplename,
+                colour = haemolysis), vjust = -1) +
+  labs(title = "MDS plot normalised counts - GRCh38 \nplasma",
+       y = "DIM 2",
+       x = "DIM 1") +
+  theme_bw()
+
+```
+
+## Differential expression based on hemolysis status
+
+```{r differential expression}
+
+design_hemo <- model.matrix(~0 + haemolysis + processGroup,
+                            data = DGElist_plasma$samples)
+
+colnames(design_hemo) <- c("hemo_no", "hemo_yes", "groupB", "groupC")
+
+voom_hemo <- voomWithQualityWeights(DGElist_plasma, design_hemo, plot=TRUE)
+
+fit_hemo <- lmFit(voom_hemo, design_hemo)
+
+fit_hemo <- eBayes(fit_hemo)
+
+summary(decideTests(fit_hemo)) # before FDR correction
+
+contrast_hemo <- makeContrasts(hemo = hemo_yes-hemo_no,
+                                  levels = design_hemo)
+
+# fit a linear regression to the contrast questions
+fit_hemo <- contrasts.fit(fit_hemo, contrast_hemo)
+
+# perform bayesian adjustment
+fit_hemo <- eBayes(fit_hemo)
+
+# summary table of the sexMode fit
+summary_fit_hemo <- summary(decideTests(fit_hemo,
+                                         adjust.method = "fdr",
+                                         p.value = 0.05))
+
+# all DE results for the heo comparison
+allTable_hemo <- topTable(fit_hemo,
+                             coef = 1,
+                             n = Inf,
+                             sort = "p")
+
+# only significant (after fdr correction) DE results for the hemo comparison
+topTable_hemo <- topTable(fit_hemo,
+                             coef = 1,
+                             n = Inf,
+                             sort = "p",
+                             p = 0.05,
+                             adjust.method = "fdr") # requires eBayes.
+
+
+```
+
+## Volcano plot for visualisation of differential expression by haemolysis status
+
+```{r volcano plots}
+# 
+# library(ggrepel)
+# library(ggpubr)
+
+decide_hemo <- decideTests(fit_hemo)
+
+d2_hemo <- topTable(fit_hemo, coef = 1, n = Inf, sort = "p")[,c(2,6)]
+d2_hemo$threshold <- 0
+d2_hemo$threshold[0:nrow(topTable_hemo)] <- 1
+d2_hemo$threshold <- as.factor(d2_hemo$threshold)
+
+d3_hemo <- decideTests(fit_hemo) %>%
+  as.data.frame
+d3_hemo <- d3_hemo[1]
+
+d4_hemo <- left_join((tibble::rownames_to_column(d2_hemo)), 
+                       (tibble::rownames_to_column(d3_hemo)), 
+                       by = "rowname")
+d4_hemo$hemo <- as.factor(d4_hemo$hemo)
+d4_hemo$neg.log10FDR <- -log10(d4_hemo$adj.P.Val)
+
+# set colours for the volcano plot
+colour <- c("red", "black", "darkgreen")
+
+FDR_FC_Decide_hemo <- decideTests(fit_hemo, lfc = 0.5) %>%
+  as.data.frame() %>%
+  set_colnames("FDR_FC_Decide") %>%
+  tibble::rownames_to_column() %>%
+  left_join(., d4_hemo, by = "rowname")
+FDR_FC_Decide_hemo$FDR_FC_Decide <- as.factor(FDR_FC_Decide_hemo$FDR_FC_Decide)
+
+volcano_hemo <- ggplot(data = FDR_FC_Decide_hemo, 
+                                  aes(x = logFC, 
+                                      y = neg.log10FDR,
+                                      label = rowname,
+                                      colour = FDR_FC_Decide)) +
+  geom_point(alpha=0.9, size=2.00) +
+  xlab("log2 Fold Change") + ylab("-ve log10 FDR") +
+  # ggtitle("Relative Oxygen Based Differential Expression of \nmiRNA in Placenta (noHV)") + 
+  scale_color_manual(values = colour, name="miRNA (hemo)",
+                         breaks = c("-1", "0", "1"),
+                         labels = c("Down-regulated", "Not Significant", "Up-regulated")) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_hline(yintercept = 1.321393, linetype = "dotted") +
+  geom_vline(xintercept = c(-1, 1), linetype = "dotted") +
+  theme_bw() +
+  theme(text = element_text(size=14)) +
+  theme(axis.text.x = element_text(colour = "black")) +
+  theme(axis.text.y = element_text(colour = "black")) +
+  geom_text_repel(data=filter(FDR_FC_Decide_hemo, FDR_FC_Decide==1 & logFC >= 2), aes(label=rowname)) +
+  geom_text_repel(data=filter(FDR_FC_Decide_hemo, FDR_FC_Decide==-1 & logFC <= -2), aes(label=rowname))
+
+volcano_hemo
+
+# MA plot in ggplot
+MAplot_data_hemo <- full_join(FDR_FC_Decide_hemo, allTable_hemo, by = c("rowname" = "SYMBOL"))
+
+MAplot_hemo <- ggplot(data = MAplot_data_hemo, 
+                                  aes(x = AveExpr, 
+                                      y = logFC.x,
+                                      label = rowname,
+                                      colour = FDR_FC_Decide)) +
+  geom_point(alpha=0.9, size=2.00) +
+  xlab("Average log2 Expression") + ylab("Log2 Fold Change") +
+  # ggtitle("M.A Plot for <= 10 wks' versus > 10 wks' comparison \nmiRNA in Placenta") + 
+  scale_color_manual(values = colour, name="miRNA\nRegulation\n(hemo)",
+                         breaks = c("-1", "0", "1"),
+                         labels = c("Down-regulated", "No Change", "Up-regulated")) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  geom_hline(yintercept = c(-1, 1), linetype = "dotted") +
+  geom_vline(xintercept = 10, linetype = "dotted") +
+  theme_bw() +
+  theme(text = element_text(size=14)) +
+  theme(axis.text.x = element_text(colour = "black")) +
+  theme(axis.text.y = element_text(colour = "black")) +
+  geom_text_repel(data = filter(MAplot_data_hemo, FDR_FC_Decide == 1 & logFC.x >= 2), 
+                  aes(label=rowname)) +
+  geom_text_repel(data = filter(MAplot_data_hemo, FDR_FC_Decide == -1 & logFC.x <= -2),
+                  aes(label=rowname)) +
+  geom_text_repel(data = filter(MAplot_data_hemo, FDR_FC_Decide == 1 & AveExpr > 10),
+                  aes(label=rowname)) +
+  geom_text_repel(data = filter(MAplot_data_hemo, FDR_FC_Decide == -1 & AveExpr > 10),
+                  aes(label=rowname))
+
+# Combined volcano and MA plots
+ggarrange(volcano_hemo, MAplot_hemo, 
+          labels = c("A", "B"),
+          ncol = 2, nrow = 1,
+          common.legend = TRUE,
+          legend = "bottom")
+
+```
+
+## Differential expression based on pregnancy status - Including haemolysed samples
+
+```{r differential expression}
+
+design_pregnancy <- model.matrix(~0 + CohortCode + processGroup,
+                            data = DGElist_plasma$samples)
+
+colnames(design_pregnancy) <- c("pregnant_no", "pregnant_yes", "groupB", "groupC")
+
+voom_pregnancy <- voomWithQualityWeights(DGElist_plasma, design_pregnancy, plot=TRUE)
+
+fit_pregnancy <- lmFit(voom_pregnancy, design_pregnancy)
+
+fit_pregnancy <- eBayes(fit_pregnancy)
+
+summary(decideTests(fit_pregnancy)) # before FDR correction
+
+contrast_pregnancy <- makeContrasts(pregnant = pregnant_yes-pregnant_no,
+                                  levels = design_pregnancy)
+
+# fit a linear regression to the contrast questions
+fit_pregnancy <- contrasts.fit(fit_pregnancy, contrast_pregnancy)
+
+# perform bayesian adjustment
+fit_pregnancy <- eBayes(fit_pregnancy)
+
+# summary table of the sexMode fit
+summary_fit_pregnancy <- summary(decideTests(fit_pregnancy,
+                                         adjust.method = "fdr",
+                                         p.value = 0.05))
+
+# all DE results for the pregnancy comparison
+allTable_pregnancy <- topTable(fit_pregnancy,
+                             coef = 1,
+                             n = Inf,
+                             sort = "p")
+
+# only significant (after fdr correction) DE results for the pregnancy comparison
+topTable_pregnancy <- topTable(fit_pregnancy,
+                             coef = 1,
+                             n = Inf,
+                             sort = "p",
+                             p = 0.05,
+                             adjust.method = "fdr") # requires eBayes.
+
+
+```
+
+## Volcano plot for visualisation of differential expression by pregnancy status
+
+```{r volcano plots}
+# 
+# library(ggrepel)
+# library(ggpubr)
+
+decide_pregnancy <- decideTests(fit_pregnancy)
+
+d2_pregnancy <- topTable(fit_pregnancy, coef = 1, n = Inf, sort = "p")[,c(2,6)]
+d2_pregnancy$threshold <- 0
+d2_pregnancy$threshold[0:nrow(topTable_pregnancy)] <- 1
+d2_pregnancy$threshold <- as.factor(d2_pregnancy$threshold)
+
+d3_pregnancy <- decideTests(fit_pregnancy) %>%
+  as.data.frame()
+d3_pregnancy <- d3_pregnancy[1]
+
+d4_pregnancy <- left_join((tibble::rownames_to_column(d2_pregnancy)), 
+                       (tibble::rownames_to_column(d3_pregnancy)), 
+                       by = "rowname")
+d4_pregnancy$pregnant <- as.factor(d4_pregnancy$pregnant)
+d4_pregnancy$neg.log10FDR <- -log10(d4_pregnancy$adj.P.Val)
+
+# set colours for the volcano plot
+colour <- c("red", "black", "darkgreen")
+
+FDR_FC_Decide_pregnant <- decideTests(fit_pregnancy, lfc = 0.5) %>%
+  as.data.frame() %>%
+  set_colnames("FDR_FC_Decide") %>%
+  tibble::rownames_to_column() %>%
+  left_join(., d4_pregnancy, by = "rowname")
+FDR_FC_Decide_pregnant$FDR_FC_Decide <- as.factor(FDR_FC_Decide_pregnant$FDR_FC_Decide)
+
+volcano_pregnancy <- ggplot(data = FDR_FC_Decide_pregnant, 
+                                  aes(x = logFC, 
+                                      y = neg.log10FDR,
+                                      label = rowname,
+                                      colour = FDR_FC_Decide)) +
+  geom_point(alpha=0.9, size=2.00) +
+  xlab("log2 Fold Change") + ylab("-ve log10 FDR") +
+  ggtitle("Differential Expression of \nmiRNA in plasma (pregnancy status)") +
+  scale_color_manual(values = colour, name="DE - pregnancy",
+                         breaks = c("-1", "0", "1"),
+                         labels = c("Down-regulated", "Not Significant", "Up-regulated")) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_hline(yintercept = 1.321393, linetype = "dotted") +
+  geom_vline(xintercept = c(-1, 1), linetype = "dotted") +
+  theme_bw() +
+  theme(text = element_text(size=14)) +
+  theme(axis.text.x = element_text(colour = "black")) +
+  theme(axis.text.y = element_text(colour = "black")) +
+  geom_text_repel(data=filter(FDR_FC_Decide_pregnant, FDR_FC_Decide==1 & logFC >= 2), aes(label=rowname)) +
+  geom_text_repel(data=filter(FDR_FC_Decide_pregnant, FDR_FC_Decide==-1 & logFC <= -2), aes(label=rowname))
+
+volcano_pregnancy
+
+# MA plot in ggplot
+MAplot_data_pregnancy <- full_join(FDR_FC_Decide_pregnant, allTable_pregnancy, by = c("rowname" = "SYMBOL"))
+
+MAplot_pregnancy <- ggplot(data = MAplot_data_pregnancy, 
+                                  aes(x = AveExpr, 
+                                      y = logFC.x,
+                                      label = rowname,
+                                      colour = FDR_FC_Decide)) +
+  geom_point(alpha=0.9, size=2.00) +
+  xlab("Average log2 Expression") + ylab("Log2 Fold Change") +
+  ggtitle("M.A Plot for non-pregnant versus pregnant (female) \nmiRNA in plasma") +
+  scale_color_manual(values = colour, name="miRNA\nRegulation\n(pregnancy)",
+                         breaks = c("-1", "0", "1"),
+                         labels = c("Down-regulated", "No Change", "Up-regulated")) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  geom_hline(yintercept = c(-1, 1), linetype = "dotted") +
+  geom_vline(xintercept = 10, linetype = "dotted") +
+  theme_bw() +
+  theme(text = element_text(size=14)) +
+  theme(axis.text.x = element_text(colour = "black")) +
+  theme(axis.text.y = element_text(colour = "black")) +
+  geom_text_repel(data = filter(MAplot_data_pregnancy, FDR_FC_Decide == 1 & logFC.x >= 2), 
+                  aes(label=rowname)) +
+  geom_text_repel(data = filter(MAplot_data_pregnancy, FDR_FC_Decide == -1 & logFC.x <= -2),
+                  aes(label=rowname)) +
+  geom_text_repel(data = filter(MAplot_data_pregnancy, FDR_FC_Decide == 1 & AveExpr > 10),
+                  aes(label=rowname)) +
+  geom_text_repel(data = filter(MAplot_data_pregnancy, FDR_FC_Decide == -1 & AveExpr > 10),
+                  aes(label=rowname))
+
+# Combined volcano and MA plots
+ggarrange(volcano_pregnancy, MAplot_pregnancy, 
+          labels = c("A", "B"),
+          ncol = 2, nrow = 1,
+          common.legend = TRUE,
+          legend = "bottom")
+
+```
+
+## Differential expression based on pregnancy status - *NOT* including haemolysed samples
+
+```{r differential expression}
+
+DGElist_plasma$samples <- mutate(DGElist_plasma$samples,
+                               pregnancy_haemolysis = paste(CohortCode, haemolysis, sep = "_"))
+
+DGElist_plasma$samples$pregnancy_haemolysis <- factor(DGElist_plasma$samples$pregnancy_haemolysis, c("NPC_none", "PAC_none", "PAC_haemolysed"))
+
+design_pregnancy_noHaemo <- model.matrix(~0 + pregnancy_haemolysis,
+                       data = DGElist_plasma$samples)
+
+colnames(design_pregnancy_noHaemo) <- levels(DGElist_plasma$samples$pregnancy_haemolysis)
+
+voom_pregnancy_noHaemo <- voomWithQualityWeights(DGElist_plasma, design_pregnancy_noHaemo, plot=TRUE)
+
+fit_pregnancy_noHaemo <- lmFit(voom_pregnancy_noHaemo, design_pregnancy_noHaemo)
+
+fit_pregnancy_noHaemo <- eBayes(fit_pregnancy_noHaemo)
+
+summary(decideTests(fit_pregnancy_noHaemo)) # before FDR correction
+
+contrast_pregnancy_noHaemo <- makeContrasts(pregnant = NPC_none-PAC_none,
+                                  levels = design_pregnancy_noHaemo)
+
+# fit a linear regression to the contrast questions
+fit_pregnancy_noHaemo <- contrasts.fit(fit_pregnancy_noHaemo, contrast_pregnancy_noHaemo)
+
+# perform bayesian adjustment
+fit_pregnancy_noHaemo <- eBayes(fit_pregnancy_noHaemo)
+
+# summary table of the sexMode fit
+summary_fit_pregnancy_noHaemo <- summary(decideTests(fit_pregnancy_noHaemo,
+                                         adjust.method = "fdr",
+                                         p.value = 0.05))
+
+# all DE results for the pregnancy comparison _noHaemo
+allTable_pregnancy_noHaemo <- topTable(fit_pregnancy_noHaemo,
+                             coef = 1,
+                             n = Inf,
+                             sort = "p")
+
+# only significant (after fdr correction) DE results for the pregnancy comparison _noHaemo
+topTable_pregnancy_noHaemo <- topTable(fit_pregnancy_noHaemo,
+                             coef = 1,
+                             n = Inf,
+                             sort = "p",
+                             p = 0.05,
+                             adjust.method = "fdr") # requires eBayes.
+
+
+```
+
+## Volcano plot for visualisation of differential expression by pregnancy status _noHaemo
+
+```{r volcano plots}
+
+decide_pregnancy_noHaemo <- decideTests(fit_pregnancy_noHaemo)
+
+d2_pregnancy_noHaemo <- topTable(fit_pregnancy_noHaemo, coef = 1, n = Inf, sort = "p")[,c(2,6)]
+d2_pregnancy_noHaemo$threshold <- 0
+d2_pregnancy_noHaemo$threshold[0:nrow(topTable_pregnancy_noHaemo)] <- 1
+d2_pregnancy_noHaemo$threshold <- as.factor(d2_pregnancy_noHaemo$threshold)
+
+d3_pregnancy_noHaemo <- decideTests(fit_pregnancy_noHaemo) %>%
+  as.data.frame()
+d3_pregnancy_noHaemo <- d3_pregnancy_noHaemo[1]
+
+d4_pregnancy_noHaemo <- left_join((tibble::rownames_to_column(d2_pregnancy_noHaemo)), 
+                       (tibble::rownames_to_column(d3_pregnancy_noHaemo)), 
+                       by = "rowname")
+d4_pregnancy_noHaemo$pregnant <- as.factor(d4_pregnancy_noHaemo$pregnant)
+d4_pregnancy_noHaemo$neg.log10FDR <- -log10(d4_pregnancy_noHaemo$adj.P.Val)
+
+# set colours for the volcano plot
+colour <- c("red", "black", "darkgreen")
+
+FDR_FC_Decide_pregnant_noHaemo <- decideTests(fit_pregnancy_noHaemo, lfc = 0.5) %>%
+  as.data.frame() %>%
+  set_colnames("FDR_FC_Decide") %>%
+  tibble::rownames_to_column() %>%
+  left_join(., d4_pregnancy_noHaemo, by = "rowname")
+FDR_FC_Decide_pregnant_noHaemo$FDR_FC_Decide <- as.factor(FDR_FC_Decide_pregnant_noHaemo$FDR_FC_Decide)
+
+volcano_prenancy_noHaemo <- ggplot(data = FDR_FC_Decide_pregnant_noHaemo, 
+                                  aes(x = logFC, 
+                                      y = neg.log10FDR,
+                                      label = rowname,
+                                      colour = FDR_FC_Decide)) +
+  geom_point(alpha=0.9, size=2.00) +
+  xlab("log2 Fold Change") + ylab("-ve log10 FDR") +
+  ggtitle("Differential Expression of \nmiRNA in plasma _noHaemo (pregnancy status)") +
+  scale_color_manual(values = colour, name="DE - pregnancy",
+                         breaks = c("-1", "0", "1"),
+                         labels = c("Down-regulated", "Not Significant", "Up-regulated")) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_hline(yintercept = 1.321393, linetype = "dotted") +
+  geom_vline(xintercept = c(-1, 1), linetype = "dotted") +
+  theme_bw() +
+  theme(text = element_text(size=14)) +
+  theme(axis.text.x = element_text(colour = "black")) +
+  theme(axis.text.y = element_text(colour = "black")) +
+  geom_text_repel(data=filter(FDR_FC_Decide_pregnant_noHaemo, FDR_FC_Decide==1 & logFC >= 2), aes(label=rowname)) +
+  geom_text_repel(data=filter(FDR_FC_Decide_pregnant_noHaemo, FDR_FC_Decide==-1 & logFC <= -2), aes(label=rowname))
+
+volcano_prenancy_noHaemo
+
+# MA plot in ggplot
+MAplot_data_pregnancy_noHaemo <- full_join(FDR_FC_Decide_pregnant_noHaemo, allTable_pregnancy_noHaemo, by = c("rowname" = "SYMBOL"))
+
+MAplot_pregnancy_noHaemo <- ggplot(data = MAplot_data_pregnancy_noHaemo, 
+                                  aes(x = AveExpr, 
+                                      y = logFC.x,
+                                      label = rowname,
+                                      colour = FDR_FC_Decide)) +
+  geom_point(alpha=0.9, size=2.00) +
+  xlab("Average log2 Expression") + ylab("Log2 Fold Change") +
+  ggtitle("M.A Plot for non-pregnant versus pregnant _noHaemo (pregnancy status) \nmiRNA in plasma") +
+  scale_color_manual(values = colour, name="miRNA\nRegulation\n(pregnancy)",
+                         breaks = c("-1", "0", "1"),
+                         labels = c("Down-regulated", "No Change", "Up-regulated")) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  geom_hline(yintercept = c(-1, 1), linetype = "dotted") +
+  geom_vline(xintercept = 10, linetype = "dotted") +
+  theme_bw() +
+  theme(text = element_text(size=14)) +
+  theme(axis.text.x = element_text(colour = "black")) +
+  theme(axis.text.y = element_text(colour = "black")) +
+  geom_text_repel(data = filter(MAplot_data_pregnancy_noHaemo, FDR_FC_Decide == 1 & logFC.x >= 2), 
+                  aes(label=rowname)) +
+  geom_text_repel(data = filter(MAplot_data_pregnancy_noHaemo, FDR_FC_Decide == -1 & logFC.x <= -2),
+                  aes(label=rowname)) +
+  geom_text_repel(data = filter(MAplot_data_pregnancy_noHaemo, FDR_FC_Decide == 1 & AveExpr > 10),
+                  aes(label=rowname)) +
+  geom_text_repel(data = filter(MAplot_data_pregnancy_noHaemo, FDR_FC_Decide == -1 & AveExpr > 10),
+                  aes(label=rowname))
+
+# Combined volcano and MA plots
+ggarrange(volcano_prenancy_noHaemo, MAplot_pregnancy_noHaemo, 
+          labels = c("A", "B"),
+          ncol = 2, nrow = 1,
+          common.legend = TRUE,
+          legend = "bottom")
+
+```
+
+## Batch correction - limmaRemoveBatchEffect
+
+# Remove batch effects
+  * limma::removeBatchEffect(x, batch=NULL, batch2=NULL, covariates=NULL,
+                  design=matrix(1,ncol(x),1), ...)
+    + x = log expression values for a series of samples
+    + batch = factor or vector indicating batches
+    + batch2 = optional factor or vector indicating a second series of batches
+    + covariates = matrix or vector of numeric covariates to be adjusted for
+    + design = optional design matrix relating to treatment conditions to be preserved
+    + ... = other arguments passed to lmfit
+    
+## Remove batch effects *without* covariates or design matrix
+
+```{r correct_noDesign}
+# create an object containing log cpm counts (log counts are expected here)
+lcpm <- edgeR::cpm(DGElist_plasma, log = TRUE, prior.count = 3)
+# apply limma::removeBatchEffects
+correctedCounts <- limma::removeBatchEffect(lcpm, batch = DGElist_plasma$samples$processGroup)
+
+# MDS of batch corrected counts
+col.hemo <- c("red", "blue")[DGElist_plasma$samples$haemolysis]
+
+col.batch <- c("orange","purple","light green")[DGElist_plasma$samples$processGroup]
+
+# plot
+plotMDS(lcpm, dim.plot = c(1,2), 
+        labels = DGElist_plasma$samples$samplename,
+        col = col.batch, 
+        pch = 20, cex = 1.4)
+legend("bottomleft",
+       fill=c("orange","purple","light green"),
+       legend=levels(DGElist_plasma$samples$processGroup),
+       cex=0.8)
+title(main = "Plasma: Multi Dimensional Scaling Plot \n(batch corrected data)")
+```
+
+## Plot miRs of interest
+
+```{r plot miRs of interest}
+
+## create a new dataframe of cpm counts from only non-hemo samples
+non_hemo_means <- correctedCounts %>% 
+  data.frame() %>% 
+  tibble::rownames_to_column("mirna") %>%
+  # calculate the mean for non-haemolysed samples only
+  dplyr::mutate(., non_haemo_mean = rowMeans(
+    dplyr::select(., -c(mirna, filter(DGElist_plasma$samples, haemolysis == "haemolysed") %>%
+                          dplyr::select(., samplename) %>%
+                          dplyr::pull(., samplename))))) %>%
+  # filter the counts to only keep miRs in the DE analysis
+  dplyr::filter(., mirna %in% allTable_hemo$SYMBOL) %>%
+  # sort the columns
+  dplyr::select(., mirna, non_haemo_mean, everything()) %>%
+  # add DE classification 1, 0, -1 for colouring figure
+  left_join(., dplyr::select(d4_hemo, mirna = rowname, hemo), by = "mirna") %>% 
+  # reorder the table with the smallest mean first
+  arrange(., non_haemo_mean)
+  
+
+# scatter plot of mean vs haemo sample expression for all topTable miRs
+non_hemo_means %>% 
+  dplyr::select(., mirna, non_haemo_mean, hemo, PAC0068) %>%
+  melt() %>% 
+ggplot() +
+  geom_point(aes(x = reorder(mirna, -value),
+                 y = value,
+                 colour = hemo,
+                 shape = variable,
+                 size = 3)) +
+  labs(x = "topTable miRNAs", 
+       y = "log2 cpm expression ", 
+       title = "PAC0068 v mean expression") +
+  theme_bw(base_size = 16) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 12))
+
+# scatter plot of mean vs haemo sample expression for all topTable miRs
+non_hemo_means %>% 
+  dplyr::select(., mirna, non_haemo_mean, hemo, PAC0045) %>%
+ggplot() +
+  geom_point(aes(x = non_haemo_mean,
+                 y = PAC0045,
+                 colour = hemo,
+                 size = 3)) +
+  labs(x = "non-haemo mean log2 cpm expression", 
+       y = "log2 cpm expression PAC0110", 
+       title = "PAC0110 v mean expression (close to cut-off)") +
+  theme_bw(base_size = 16) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 12))
+
+# box plots of all topTable miRs with a point indicating the position of haemo samples
+melt <- non_hemo_means %>% 
+  dplyr::select(., -non_haemo_mean, -hemo) %>% 
+  as.data.frame() %>% 
+  tibble::column_to_rownames("mirna") %>% 
+  t() %>% 
+  as.data.frame() %>% 
+  tibble::rownames_to_column("samplename") %>% 
+  melt(id = "samplename",
+       variable.name = "mirna",
+       value.name = "expression")
+  
+# ggplot(data = melt) +
+#   geom_boxplot(aes(x = mirna,
+#                    y = expression)) +
+#   geom_point(aes(x = filter(melt, samplename == "PAC0110") %>% dplyr::select(mirna),
+#              y = filter(melt, samplename == "PAC0110") %>% dplyr::select(expression))) +
+#   labs(x = "topTable miRNAs", 
+#        y = "log2 cpm expression ", 
+#        title = "") +
+#   theme_bw(base_size = 16) +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 12))
+
+ggplot(data = melt) +
+  geom_boxplot(aes(x = mirna,
+                   y = expression)) +
+  geom_point(aes(x = mirna,
+             y = expression)) +
+  labs(x = "topTable miRNAs", 
+       y = "log2 cpm expression ", 
+       title = "") +
+  theme_bw(base_size = 16) +
+  theme(axis.text.x = element_text(angle = 270, vjust = 1, size = 12))
+
+## miR of interest plot
+cpm(DGElist_plasma, log = FALSE) %>% 
+  as.data.frame() %>% 
+  t() %>%
+  as.data.frame() %>% 
+  tibble::rownames_to_column("samplename") %>% 
+ggplot() +
+  geom_boxplot(aes(y = `hsa-miR-451a`, fill = DGElist_plasma$samples$haemolysis))
+
+# heatmap of miRNA up-regulated in the haemolysed samples.
+cpm_haemo_up <- cpm(DGElist_plasma, log = TRUE) %>%
+  as.data.frame() %>% 
+  tibble::rownames_to_column("SYMBOL") %>% 
+  subset(., SYMBOL %in% filter(topTable_hemo, logFC > 0)[,"SYMBOL"])
+rownames(cpm_haemo_up) <- cpm_haemo_up$SYMBOL
+cpm_haemo_up <- cpm_haemo_up %>% 
+  dplyr::select(., -SYMBOL)
+
+# cpm_haemo_down <- cpm(DGElist_plasma, log = TRUE) %>%
+#   as.data.frame() %>% 
+#   tibble::rownames_to_column("SYMBOL") %>% 
+#   subset(., SYMBOL %in% filter(topTable_hemo, logFC < 0)[,"SYMBOL"])
+# rownames(cpm_haemo_down) <- cpm_haemo_down$SYMBOL
+# cpm_haemo_down <- cpm_haemo_down %>% 
+#   dplyr::select(., -SYMBOL)
+
+# create annotations
+a <- DGElist_plasma$samples[, c("samplename","haemolysis", "miR23a.miR451a")]
+rownames(a) <- a$samplename
+a$samplename <- NULL
+
+pheatmap(cpm_haemo_up[,DGElist_plasma$samples$samplename],
+         annotation_col = a,
+         scale = "row")
+
+# pheatmap(cpm_haemo_down,
+#          annotation_col = a,
+#          scale = "row")
+
+```
+
+
+```{r combat batch correction}
+
+# # Use Combat to correct the expression values
+# combatExpression <- ComBat(dat = DGElist_plasma$counts, 
+#                                    batch = DGElist_plasma$samples$processGroup, 
+#                                    par.prior = TRUE, 
+#                                    prior.plots = FALSE)
+# 
+# # heatmap of miRNA up-regulated in the haemolysed samples.
+# combat_haemo_up <- combatExpression %>%
+#   as.data.frame() %>% 
+#   tibble::rownames_to_column("SYMBOL") %>% 
+#   subset(., SYMBOL %in% filter(topTable_hemo, logFC > 0)[,"SYMBOL"])
+# rownames(combat_haemo_up) <- combat_haemo_up$SYMBOL
+# combat_haemo_up <- combat_haemo_up %>% 
+#   dplyr::select(., -SYMBOL)
+# 
+# combat_haemo_down <- combatExpression %>%
+#   as.data.frame() %>% 
+#   tibble::rownames_to_column("SYMBOL") %>% 
+#   subset(., SYMBOL %in% filter(topTable_hemo, logFC < 0)[,"SYMBOL"])
+# rownames(combat_haemo_down) <- combat_haemo_down$SYMBOL
+# combat_haemo_down <- combat_haemo_down %>% 
+#   dplyr::select(., -SYMBOL)
+# 
+# pheatmap(combat_haemo_down,
+#          annotation_col = a,
+#          scale = "row")
+
+
+```
+
+## Mean centred counts
+
+```{r mean centred counts}
+
+## Test method
+# testData <- data.frame("sample1" = c(10, 5, 8, 7),
+#               "sample2" = c(12, 15, 20, 50),
+#               "sample3" = c(18, 27, 36, 18))
+# rownames(testData) <- c("miR1", "miR2", "miR3", "miR4")
+# 
+# testMean <- c(1, 2, 3, 4)
+# 
+# testResult <- sweep(testData, 1, testMean, "-")
+
+## mean centre the corrected counts
+meanCentre <- correctedCounts %>%
+  data.frame() %>%
+  tibble::rownames_to_column("mirna") %>%
+  # calculate the mean for only non-haemolysed samples
+  dplyr::mutate(., non_haemo_mean =
+                  rowMeans(dplyr::select(., -c(mirna, filter(DGElist_plasma$samples, haemolysis == "haemolysed") %>%
+                                                 dplyr::select(., samplename) %>%
+                                                 dplyr::pull(., samplename))))) %>%
+  # calculate the mean only for haemolysed samples
+  dplyr::mutate(., haemo_mean = rowMeans(dplyr::select(., -c(mirna, filter(DGElist_plasma$samples, haemolysis == "none") %>%
+                                                               dplyr::select(., samplename) %>%
+                                                               dplyr::pull(., samplename))))) %>%
+    dplyr::rowwise() %>% 
+    dplyr::mutate(mean = mean(c(non_haemo_mean, haemo_mean), na.rm = TRUE)) %>% 
+    dplyr::select(., mirna, mean, non_haemo_mean, haemo_mean)
+
+meanCentredCounts <- sweep(correctedCounts[meanCentre$mirna,], 1, meanCentre$mean, "-")
+
+# heatmap of miRNA up-regulated in the haemolysed samples.
+centred_haemo_up <- meanCentredCounts %>%
+  as.data.frame() %>% 
+  tibble::rownames_to_column("SYMBOL") %>% 
+  subset(., SYMBOL %in% filter(topTable_hemo, logFC > 0)[,"SYMBOL"])
+rownames(centred_haemo_up) <- centred_haemo_up$SYMBOL
+centred_haemo_up <- centred_haemo_up %>% 
+  dplyr::select(., -SYMBOL)
+
+# reduce any individual count less than four to zero
+centred_haemo_up[centred_haemo_up < -4] <- -4
+centred_haemo_up[centred_haemo_up > 4] <- 4
+
+# create annotations
+a <- DGElist_plasma$samples[, c("samplename","haemolysis", "miR23a.miR451a")]
+rownames(a) <- a$samplename
+a$samplename <- NULL
+
+pheatmap(centred_haemo_up,
+         annotation_col = a)
+
+pheatmap(centred_haemo_up,
+         annotation_col = a,
+         cutree_cols = 5,
+         fontsize = 8)
+
+
+```
+
+## Classifier miRs
+
+```{r classifier miRs}
+# what makes a good classifier?
+
+# miRs that are up-regulated in the DE
+# keep only miRs that are significantly higher in haemolysed samples
+up_miRs <- filter(topTable_hemo, logFC > 0) %>%
+  
+  # get rid of the columns we don't need
+  dplyr::select(., SYMBOL, logFC, AveExpr, adj.P.Val) %>% 
+
+  # add columns for rank
+  dplyr::arrange(., -logFC) %>% 
+  dplyr::mutate(., rank_logFC = 1:nrow(.)) %>% 
+  dplyr::arrange(., -AveExpr) %>% 
+  dplyr::mutate(rank_AveExpr = 1:nrow(.)) %>% 
+  dplyr::arrange(., adj.P.Val) %>% 
+  dplyr::mutate(., rank_adj.P.Val = 1:nrow(.)) %>% 
+  dplyr::select(., SYMBOL, logFC, rank_logFC, AveExpr, rank_AveExpr, adj.P.Val, rank_adj.P.Val)
+
+# select the "top 60" miRs from each of the rank lists and join them back together
+top_DE_classifier <- dplyr::filter(up_miRs[,c("SYMBOL", "logFC", "rank_logFC")], between(rank_logFC, 1, 60)) %>% 
+  full_join(., dplyr::filter(up_miRs[,c("SYMBOL", "AveExpr", "rank_AveExpr")], between(rank_AveExpr, 1, 60)), by = "SYMBOL") %>% 
+  full_join(., dplyr::filter(up_miRs[,c("SYMBOL", "adj.P.Val", "rank_adj.P.Val")], between(rank_adj.P.Val, 1, 60)), by = "SYMBOL")  %>%
+  mutate_if(is.numeric, round, digits=3)
+
+# only keep rows that meet top criteria in all three columns
+top_DE_classifier <- top_DE_classifier[complete.cases(top_DE_classifier), ]
+
+
+# Combine the DE and PC1 miRs
+# PC1_mirs <- readRDS(file = here("cleanData/PC1_mirs.rds"))
+
+combined_mirs <- full_join(top100_DE_classifier, PC1_mirs, by = "SYMBOL") %>%
+.[complete.cases(.),]
+
+# plot heatmap of the remaining miRs
+
+pheatmap(subset(centred_haemo_up, rownames(centred_haemo_up) %in% top_DE_classifier$SYMBOL),
+         annotation_col = a,
+         cutree_cols = 5,
+         cutree_rows = 3,
+         fontsize = 8)
+
+## join miRs DE between pregnant and non-pregnant DE -> only keep miRs not significant in the pregancy comparison
+combined_mirs_plus_pregnancy <- left_join(top_DE_classifier, topTable_pregnancy_noHaemo, by = "SYMBOL") %>% 
+  .[!complete.cases(.),]
+
+# heatmap of remaining miRs.
+subset(centred_haemo_up, rownames(centred_haemo_up) %in% combined_mirs_plus_pregnancy$SYMBOL) %>%
+  pheatmap(annotation_col = a,
+         cluster_cols = TRUE,
+         cutree_cols = 5,
+         cutree_rows = 3,
+         fontsize = 8)
+
+# heatmap of remaining miRs.
+subset(centred_haemo_up,
+       rownames(centred_haemo_up) %in% combined_mirs_plus_pregnancy$SYMBOL)[, arrange(DGElist_plasma$samples, -miR23a.miR451a) %>%
+                                                                              # convert the samplenames to a vector
+                                                                              dplyr::pull(., samplename)] %>%
+  pheatmap(annotation_col = a,
+         cluster_cols = FALSE,
+         cutree_rows = 3,
+         fontsize = 8)
+         
+```
+
+# Predict the difference in y-intercept
+
+```{r}
+
+# create a vector of sample names for use in the lapply
+varc <- dplyr::select(DGElist_plasma$samples, samplename) %>%
+  dplyr::pull(., samplename)
+
+
+y_int_diff <- lapply(varc, function(x){
+  d <- non_hemo_means[, c("non_haemo_mean", x, "hemo")]
+  levels(d$hemo)[1:2] <- 0
+  
+  fe <- as.formula(paste0(x, "~ non_haemo_mean + hemo"))
+  f <- eval(bquote(lm(.(fe), data=d)))
+  summary(f)
+  
+  coef(f)[3]
+})
+names(y_int_diff) <- varc
+
+# plot the y intercept difference against the dCq vaues
+temp <- as.data.frame(unlist(y_int_diff)) %>%
+  set_colnames("y_int_diff") %>% 
+  tibble::rownames_to_column("samplename") 
+temp$samplename <- gsub(".hemo1", "", temp$samplename)
+temp <- left_join(temp, dplyr::select(DGElist_plasma$samples, samplename, miR23a.miR451a, haemolysis))
+
+ggplot(data = temp,
+       aes(y = y_int_diff,
+           x = miR23a.miR451a,
+           colour = miR23a.miR451a,
+           size = 6)) +
+  scale_color_viridis(discrete = FALSE,
+                      option = "magma",
+                      direction = -1) +
+  scale_size(guide = "none") +
+  geom_point() +
+  # show a tick mark every 1 from -5 t0 10
+  scale_x_continuous(name = "delta Cq",
+                     breaks = seq(-5, 10, 1)) +
+  geom_vline(xintercept = 7,
+             linetype = "dotted") +
+  geom_hline(yintercept = 1,
+             linetype = "dotted") +
+  theme_bw()
+
+## add a column indicating the classifier miRs
+non_hemo_means <- non_hemo_means %>% 
+  mutate(., classifier = ifelse(mirna %in% combined_mirs_plus_pregnancy$SYMBOL, 1,
+                                ifelse(mirna %notin% combined_mirs_plus_pregnancy$SYMBOL, 0, NA)))
+
+## calculate the difference between the mean of the classifier miRs and all other miRs
+y_int_diff_classifier <- lapply(varc, function(x){
+  d <- non_hemo_means[, c("non_haemo_mean", x, "classifier")]
+  # levels(d$hemo)[1:2] <- 0
+  
+  fe <- as.formula(paste0(x, "~ non_haemo_mean + classifier"))
+  f <- eval(bquote(lm(.(fe), data=d)))
+  summary(f)
+  
+  coef(f)[3]
+})
+names(y_int_diff_classifier) <- varc
+
+# plot the y intercept difference against the dCq vaues
+temp <- as.data.frame(unlist(y_int_diff_classifier)) %>%
+  set_colnames("y_int_diff_classifier") %>% 
+  tibble::rownames_to_column("samplename") 
+temp$samplename <- gsub(".classifier", "", temp$samplename)
+temp <- left_join(temp, dplyr::select(DGElist_plasma$samples, samplename, miR23a.miR451a, haemolysis))
+
+ggplot(data = temp,
+       aes(y = y_int_diff_classifier,
+           x = miR23a.miR451a,
+           colour = miR23a.miR451a,
+           size = 6)) +
+  scale_color_viridis(discrete = FALSE,
+                      option = "magma",
+                      direction = -1) +
+  scale_size(guide = "none") +
+  geom_point() +
+  # show a tick mark every 1 from -5 t0 10
+  scale_x_continuous(name = "delta Cq",
+                     breaks = seq(-5, 10, 1)) +
+  # vertical line represents the dCq cut-off
+  geom_vline(xintercept = 7,
+             linetype = "dotted") +
+  # horizontal line represents the y intercept difference for the haemolysed sample with the smallest dCq
+  geom_hline(yintercept = aggregate(y_int_diff_classifier ~ haemolysis,
+                                    temp,
+                                    function(x) min(x))[2, 2],
+             linetype = "dotted") +
+  geom_encircle(aes(y = y_int_diff_classifier,
+                    x = miR23a.miR451a), 
+                data = temp[temp$haemolysis == "haemolysed", ], 
+                color = "red", 
+                size = 2, 
+                expand = 0.03) +
+  geom_encircle(aes(y = y_int_diff_classifier,
+                    x = miR23a.miR451a), 
+                data = temp[temp$haemolysis == "none" &
+                              temp$y_int_diff_classifier >= aggregate(y_int_diff_classifier ~ haemolysis,
+                                                                      temp,
+                                                                      function(x) min(x))[2, 2], ], 
+                color = "blue", 
+                size = 2, 
+                expand=0.02) +
+  theme_bw()
+  
+
+# create plot data for individual samples
+varc <- "PAC0110"
+dat_run <- non_hemo_means[,c("non_haemo_mean",varc,"hemo")]
+levels(dat_run$hemo)[1:2] <- 0
+
+fit1_eq <- as.formula(paste0(varc,"~ non_haemo_mean + hemo"))
+fit1 <- eval(bquote(lm(.(fit1_eq),data=dat_run)))
+summary(fit1)
+
+coef(fit1)[3]
+
+plot_dat <- expand.grid("non_haemo_mean"=seq(min(dat_run$non_haemo_mean),max(dat_run$non_haemo_mean),length.out=10),"hemo"=0:1)
+plot_dat$hemo <- factor(plot_dat$hemo,0:1)                   
+plot_dat$pred <- predict(fit1,newdata=plot_dat,type="response")
+
+ggplot(data = plot_dat,
+       aes(x = non_haemo_mean,
+           y = pred,
+           group = hemo,
+           colour = hemo)) +
+  labs(x = "non-haemo mean log2 cpm expression", 
+       y = "predicted value log2 cpm expression", 
+       subtitle = "line of best fit for DE up (blue) and all other miRs (red)",
+       title = "PAC0110 - highest dCq") +
+  geom_line()
+
+# scatter plot of mean vs haemo sample expression for all topTable miRs
+p <- non_hemo_means %>% 
+  dplyr::select(., mirna, non_haemo_mean, hemo, PAC0110) %>%
+  ggplot() +
+  geom_point(aes(x = non_haemo_mean,
+                 y = PAC0110,
+                 colour = hemo,
+                 size = 3)) +
+  labs(x = "non-haemo mean log2 cpm expression", 
+       y = "log2 cpm expression PAC0110", 
+       title = "PAC0110 v mean expression (non-haemo)") +
+  theme_bw(base_size = 16) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, size = 12))
+
+
+
+
+```
+
+## Plotting side by side distributions - 16 classifier miRs
+
+```{r plotting distributions}
+
+plotVar <- "NPC0063"
+
+cdat <- ddply(dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log=TRUE)), plotVar) %>%
+  tibble::rownames_to_column("mirna") %>% 
+  mutate(., classifier = as.factor(ifelse(mirna %in% combined_mirs_plus_pregnancy$SYMBOL, 1,
+                                          ifelse(mirna %notin% combined_mirs_plus_pregnancy$SYMBOL, 0, NA)))),
+  "classifier", summarise, expression.median = median(get(plotVar)))
+
+
+dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>%
+  tibble::rownames_to_column("mirna") %>% 
+  mutate(., classifier = ifelse(mirna %in% combined_mirs_plus_pregnancy$SYMBOL, 1,
+                                ifelse(mirna %notin% combined_mirs_plus_pregnancy$SYMBOL, 0, NA))) %>% 
+  ggplot(aes(x = get(plotVar),
+             fill = as.factor(classifier))) +
+  geom_density(alpha = 0.3) +
+  geom_vline(data = cdat,
+             aes(xintercept = expression.median,
+                 colour = as.factor(classifier),
+                 linetype = "dashed"),
+             show.legend = FALSE) +
+  labs(title = paste(plotVar, "Denisty of CPM counts"),
+       subtitle = "Smallest dCq",
+       x = "log2 CPM Counts",
+       y = "Density") +
+  scale_fill_discrete(name = "Classifier \nStatus", labels = c("Non-Classifier", "Classifier")) +
+  theme_bw(base_size = 16)
+  
+ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>%
+  tibble::rownames_to_column("mirna") %>% 
+  mutate(., classifier = ifelse(mirna %in% combined_mirs_plus_pregnancy$SYMBOL, 1,
+                                ifelse(mirna %notin% combined_mirs_plus_pregnancy$SYMBOL, 0, NA))) %>% 
+  ggplot(aes(x = get(plotVar),
+             fill = as.factor(classifier))) +
+  geom_histogram(alpha = 0.5, binwidth = 1) +
+  geom_vline(data = cdat,
+             aes(xintercept = expression.median,
+                 colour = as.factor(classifier),
+                 linetype = "dashed"),
+             show.legend = FALSE) +
+  labs(title = paste(plotVar, "Histogram of CPM counts"),
+       subtitle = "Smallest dCq",
+       x = "log2 CPM Counts",
+       y = "Count") +
+  scale_fill_discrete(name = "Classifier \nStatus", labels = c("Non-Classifier", "Classifier")) +
+  theme_bw(base_size = 16) 
+
+print(cdat[2, 2] - cdat[1, 2])
+```
+
+## Plotting side by side distributions - 30 classifier miRs
+
+```{r }
+plotVar <- "PAC0063"
+
+cdat2 <- ddply(dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>%
+                tibble::rownames_to_column("mirna") %>% 
+                mutate(., classifier = as.factor(ifelse(mirna %in% top_DE_classifier$SYMBOL, 1,
+                                                        ifelse(mirna %notin% top_DE_classifier$SYMBOL, 0, NA)))),
+              "classifier", summarise, expression.median = median(get(plotVar)))
+
+
+dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>%
+  tibble::rownames_to_column("mirna") %>% 
+  mutate(., classifier = ifelse(mirna %in% top_DE_classifier$SYMBOL, 1,
+                                ifelse(mirna %notin% top_DE_classifier$SYMBOL, 0, NA))) %>% 
+  ggplot(aes(x = get(plotVar), fill = as.factor(classifier))) +
+  geom_density(alpha = 0.3) +
+  geom_vline(data = cdat,
+             aes(xintercept = expression.median,
+                 colour = as.factor(classifier),
+                 linetype = "dashed"),
+             show.legend = FALSE) +
+  labs(title = paste(plotVar, "Denisty of PM counts (30)"),
+       subtitle = "Smallest dCq",
+       x = "log2 CPM Counts",
+       y = "Density") +
+  scale_fill_discrete(name = "Classifier \nStatus", labels = c("Non-Classifier", "Classifier")) +
+  theme_bw(base_size = 16)
+
+dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>%
+  tibble::rownames_to_column("mirna") %>% 
+  mutate(., classifier = ifelse(mirna %in% top_DE_classifier$SYMBOL, 1,
+                                ifelse(mirna %notin% top_DE_classifier$SYMBOL, 0, NA))) %>% 
+  ggplot(aes(x = get(plotVar),
+             fill = as.factor(classifier))) +
+  geom_histogram(alpha = 0.5, binwidth = 1) +
+  geom_vline(data = cdat,
+             aes(xintercept = expression.median,
+                 colour = as.factor(classifier),
+                 linetype = "dashed"),
+             show.legend = FALSE) +
+  labs(title = paste(plotVar, "Histogram of CPM counts (30)"),
+       subtitle = "Smallest dCq",
+       x = "log2 CPM Counts",
+       y = "Count") +
+  scale_fill_discrete(name = "Classifier \nStatus", labels = c("Non-Classifier", "Classifier")) +
+  theme_bw(base_size = 16) 
+
+print(cdat2[2, 2] - cdat2[1, 2])
+```
+
+## Plot distribution of classifier miRs and the 25th ranked miR
+
+```{r}
+
+plotVar <- "PAC0048"
+
+cdat3 <- ddply(dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>%
+                tibble::rownames_to_column("mirna") %>% 
+                mutate(., classifier = as.factor(ifelse(mirna %in% combined_mirs_plus_pregnancy$SYMBOL, 1,
+                                                        ifelse(mirna %notin% combined_mirs_plus_pregnancy$SYMBOL, 0, NA)))),
+              "classifier", summarise, expression.median = median(get(plotVar)))
+
+# extract the value of the 25th ranked miR not in the classifier set
+twentyFifth <- dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>% 
+  subset(., rownames(.) %notin% combined_mirs_plus_pregnancy$SYMBOL) %>% 
+  arrange(., -get(plotVar)) %>% 
+  .[25, ]
+
+
+dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>%
+  tibble::rownames_to_column("mirna") %>% 
+  mutate(., classifier = ifelse(mirna %in% combined_mirs_plus_pregnancy$SYMBOL, 1,
+                                ifelse(mirna %notin% combined_mirs_plus_pregnancy$SYMBOL, 0, NA))) %>% 
+  ggplot(aes(x = get(plotVar),
+             fill = as.factor(classifier))) +
+  geom_histogram(alpha = 0.5, binwidth = 1) +
+  geom_vline(data = cdat3,
+             aes(xintercept = expression.median,
+                 colour = as.factor(classifier)),
+             show.legend = FALSE) +
+  geom_vline(xintercept = twentyFifth,
+             linetype = "dotted") +
+  labs(title = paste(plotVar, "Histogram of CPM counts (16)"),
+       subtitle = "dCq = 7",
+       x = "log2 CPM Counts",
+       y = "Count") +
+  scale_fill_discrete(name = "Classifier \nStatus", labels = c("Non-Classifier", "Classifier")) +
+  annotate("text",
+           x = 13,
+           y = 25,
+           label = paste(print(cdat3[2, 2] - twentyFifth)),
+           parse = TRUE,
+           size = 14) +
+  annotate("text",
+           x = 13,
+           y = 27,
+           label = "ClassifierMedian - twentyFifth",
+           size = 14) +
+  theme_bw(base_size = 16)
+  
+
+print(cdat3[2, 2] - twentyFifth)
+                                    
+
+```
+
+## Summary statistics of the metadata
+
+```{r summary stats}
+
+# Compute descriptive statistic
+
+meta <- DGElist_plasma$samples %>% 
+  dplyr::select(., -c("group", "samplename", "CohortCode", "ethnicity", "haemolysis", "processGroup", "smoker", "simpleOutcome", "fetal_sex"))
+meta$gestationalAge <- as.numeric(meta$gestationalAge)
+meta$BMI <- as.numeric(meta$BMI)
+meta$maternalAge <- as.numeric(meta$maternalAge)
+
+# replace any zero values with NAs
+
+meta[meta == 0] <- NA
+
+res <- stat.desc(meta) %>% 
+  round(., 2) %>% 
+  t()
+
+table <- round(res, 2) %>%
+  as.data.frame() %>% 
+  tibble::rownames_to_column() %>% 
+  left_join(., as.data.frame(t(meta)) %>%
+              dplyr::select(., PAC0033, PAC0034, PAC0041, PAC0048, PAC0050, PAC0051, PAC0054, PAC0056, PAC0062, PAC0068, PAC0084, PAC0105, PAC0110, PAC0121) %>%
+              round(., 2) %>% 
+              tibble::rownames_to_column(),
+            by = "rowname")
+
+cohort_meta <- DGElist_plasma$samples %>% 
+  dplyr::select(., -c("group", "ethnicity", "smoker", "simpleOutcome", "fetal_sex"))
+cohort_meta$gestationalAge <- as.numeric(cohort_meta$gestationalAge)
+cohort_meta$BMI <- as.numeric(cohort_meta$BMI)
+cohort_meta$maternalAge <- as.numeric(cohort_meta$maternalAge)
+
+# replace any zero values with NAs
+cohort_meta[cohort_meta == 0] <- NA
+
+# Stripchart colored by groups: CohortCode
+# ggstripchart(cohort_meta, x = "CohortCode",
+#              y = "lib.size",
+#           color = "CohortCode",
+#           palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+#           add = "mean_sd") %>% 
+#   ggplotly()
+# 
+# ggstripchart(cohort_meta, x = "CohortCode",
+#              y = "lib.size",
+#           color = "haemolysis",
+#           palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+#           add = "mean_sd") +
+# geom_label_repel( 
+#     data = filter(cohort_meta, samplename %in% c("PAC0041", "PAC0048", "PAC0050", "PAC0062")),
+#     aes(label = samplename),
+#     box.padding = unit(0.35, "lines"),
+#     point.padding = unit(0.5, "lines")
+#   )
+
+ggplot(cohort_meta, aes(x = CohortCode,
+                        y = gestationalAge,
+                        label = samplename)) +
+  geom_point(data = cohort_meta[cohort_meta$haemolysis == "none",],
+             color = "grey50",
+             position = "jitter") +
+  geom_label_repel( 
+    data = filter(cohort_meta, samplename %in% c("PAC0041", "PAC0048", "PAC0050", "PAC0062")),
+    aes(label = samplename),
+    box.padding = unit(0.35, "lines"),
+    point.padding = unit(0.5, "lines")
+  ) +
+  geom_point(data = cohort_meta[cohort_meta$haemolysis != "none",], color = "red") +
+  theme_bw()
+
+
+
+```
