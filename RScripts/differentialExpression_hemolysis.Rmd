@@ -1247,7 +1247,7 @@ pheatmap(centred_haemo_up,
 
 # miRs that are up-regulated in the DE
 # keep only miRs that are significantly higher in haemolysed samples
-up_miRs <- filter(topTable_hemo, logFC > 0) %>%
+up_miRs <- filter(topTable_hemo, logFC > 0.9) %>%
   
   # get rid of the columns we don't need
   dplyr::select(., SYMBOL, logFC, AveExpr, adj.P.Val) %>% 
@@ -1274,8 +1274,8 @@ top_DE_classifier <- top_DE_classifier[complete.cases(top_DE_classifier), ]
 # Combine the DE and PC1 miRs
 # PC1_mirs <- readRDS(file = here("cleanData/PC1_mirs.rds"))
 
-combined_mirs <- full_join(top100_DE_classifier, PC1_mirs, by = "SYMBOL") %>%
-.[complete.cases(.),]
+# combined_mirs <- full_join(top100_DE_classifier, PC1_mirs, by = "SYMBOL") %>%
+# .[complete.cases(.),]
 
 # plot heatmap of the remaining miRs
 
@@ -1317,7 +1317,7 @@ subset(centred_haemo_up,
 varc <- dplyr::select(DGElist_plasma$samples, samplename) %>%
   dplyr::pull(., samplename)
 
-
+# calculate the y-intercept difference between the DE_up miRs and all others
 y_int_diff <- lapply(varc, function(x){
   d <- non_hemo_means[, c("non_haemo_mean", x, "hemo")]
   levels(d$hemo)[1:2] <- 0
@@ -1385,6 +1385,7 @@ ggplot(data = temp,
        aes(y = y_int_diff_classifier,
            x = miR23a.miR451a,
            colour = miR23a.miR451a,
+           label = samplename,
            size = 6)) +
   scale_color_viridis(discrete = FALSE,
                       option = "magma",
@@ -1394,6 +1395,13 @@ ggplot(data = temp,
   # show a tick mark every 1 from -5 t0 10
   scale_x_continuous(name = "delta Cq",
                      breaks = seq(-5, 10, 1)) +
+  geom_text_repel(data = filter(temp,
+                                haemolysis == "none" &
+                                  y_int_diff_classifier >= aggregate(y_int_diff_classifier ~ haemolysis,
+                                                                     temp,
+                                                                     function(x) min(x))[2, 2]),
+                  box.padding = 1,
+                  aes(label=samplename)) +
   # vertical line represents the dCq cut-off
   geom_vline(xintercept = 7,
              linetype = "dotted") +
@@ -1519,7 +1527,40 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
 print(cdat[2, 2] - cdat[1, 2])
 ```
 
-## Plotting side by side distributions - 30 classifier miRs
+## calculate the difference between the median of the distributions for all samples - 18 classifier miRs
+
+```{r calculate median difference reduced classifier list}
+
+# create a vector of sample names for use in the lapply
+varc <- dplyr::select(DGElist_plasma$samples, samplename) %>%
+  dplyr::pull(., samplename)
+
+
+distributionDifference <- lapply(varc, function(x){
+ # calculate the median of the two distributions (1 = classifier, 0 = other) 
+  cdat <- ddply(
+    dplyr::select(
+      as.data.frame(
+        cpm(
+          DGElist_plasma$counts, log = TRUE)), x) %>%
+                   tibble::rownames_to_column("mirna") %>% 
+                   mutate(., classifier = as.factor(ifelse(mirna %in% combined_mirs_plus_pregnancy$SYMBOL, 1,
+                                                           ifelse(mirna %notin% combined_mirs_plus_pregnancy$SYMBOL, 0, NA)))),
+                 "classifier", summarise, expression.median = median(get(x)))
+  # calculate the difference between the two medians (classifier-other)  
+  cdat[2, 2] - cdat[1, 2]
+})
+names(distributionDifference) <- varc
+
+unlist_distributionDifference <- do.call(cbind.data.frame, distributionDifference) %>% 
+  t() %>%
+  set_colnames("distributionDifference") %>%
+  as.data.frame() %>% 
+  tibble::rownames_to_column("samplename")
+
+```
+
+## Plotting side by side distributions - 36 classifier miRs
 
 ```{r }
 plotVar <- "PAC0063"
@@ -1542,7 +1583,7 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
                  colour = as.factor(classifier),
                  linetype = "dashed"),
              show.legend = FALSE) +
-  labs(title = paste(plotVar, "Denisty of PM counts (30)"),
+  labs(title = paste(plotVar, "Denisty of CPM counts (30)"),
        subtitle = "Smallest dCq",
        x = "log2 CPM Counts",
        y = "Density") +
@@ -1556,7 +1597,7 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
   ggplot(aes(x = get(plotVar),
              fill = as.factor(classifier))) +
   geom_histogram(alpha = 0.5, binwidth = 1) +
-  geom_vline(data = cdat,
+  geom_vline(data = cdat2,
              aes(xintercept = expression.median,
                  colour = as.factor(classifier),
                  linetype = "dashed"),
@@ -1569,6 +1610,39 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
   theme_bw(base_size = 16) 
 
 print(cdat2[2, 2] - cdat2[1, 2])
+```
+
+## calculate the difference between the median of the distributions for all samples (36 classifier miRs)
+
+```{r calculate median difference all DE miRs}
+
+# create a vector of sample names for use in the lapply
+varc <- dplyr::select(DGElist_plasma$samples, samplename) %>%
+  dplyr::pull(., samplename)
+
+
+distributionDifference_all <- lapply(varc, function(x){
+ # calculate the median of the two distributions (1 = classifier, 0 = other) 
+  cdat <- ddply(
+    dplyr::select(
+      as.data.frame(
+        cpm(
+          DGElist_plasma$counts, log = TRUE)), x) %>%
+                   tibble::rownames_to_column("mirna") %>% 
+                   mutate(., classifier = as.factor(ifelse(mirna %in% top_DE_classifier$SYMBOL, 1,
+                                                           ifelse(mirna %notin% top_DE_classifier$SYMBOL, 0, NA)))),
+                 "classifier", summarise, expression.median = median(get(x)))
+  # calculate the difference between the two medians (classifier-other)  
+  cdat[2, 2] - cdat[1, 2]
+})
+names(distributionDifference_all) <- varc
+
+unlist_distributionDifference_all <- do.call(cbind.data.frame, distributionDifference_all) %>% 
+  t() %>%
+  set_colnames("distributionDifference") %>%
+  as.data.frame() %>% 
+  tibble::rownames_to_column("samplename")
+
 ```
 
 ## Plot distribution of classifier miRs and the 25th ranked miR
