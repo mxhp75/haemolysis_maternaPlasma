@@ -1,0 +1,745 @@
+---
+title: "haemolysis_PCA"
+author: "Melanie Smith"
+date: "29/10/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+    echo = TRUE,
+    message = FALSE,
+    warning = FALSE,
+    cache = FALSE,
+    fig.align = "center",
+    results = "hide"
+)
+
+```
+
+```{r UDF}
+`%notin%` <- Negate(`%in%`)
+# function (x) to count the number of non-zero records in each column (ie per sample)
+nonzero <- function(x) sum(x != 0)
+```
+
+# Load required libraries
+
+```{r loadLibrary}
+library(plyr)
+library(reshape2)
+library(dplyr)
+library(tidyverse)
+library(stringr)
+library(edgeR)
+library(pander)
+library(magrittr)
+library(plotly)
+library(ggplot2)
+library(RColorBrewer)
+library(pheatmap)
+library(RUVSeq)
+library(ggpubr)
+library(ggdendro)
+library(preprocessCore)
+library(dendextend)
+library(sva)
+library(quantro)
+library(here)
+```
+
+```{r import umi_tools counts}
+
+# 200609 plasma counts aligned to GRCh38
+
+files <- c("rawData/200609_plasma/NPC_0023_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0027_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0028_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0031_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0032_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0036_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0038_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0039_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0043_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0045_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0047_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0049_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0052_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0054_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0055_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0056_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0060_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0062_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0063_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0067_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0068_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0070_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0076_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/NPC_0077_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0019_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0068_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0092_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0094_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0101_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0106_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0110_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0113_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0121_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0125_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0126_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0128_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0130_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0135_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0137_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0141_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0148_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0183_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0186_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0191_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0193_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0196_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0198_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0200_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0202_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0203_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0204_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0208_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0211_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0214_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0215_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0219_P.R1_deduplicated_mir_counts.tsv", "rawData/200609_plasma/PAC_0221_P.R1_deduplicated_mir_counts.tsv")
+
+# test
+read.delim(files[1], nrow=5)
+
+# establish DGEList object - all batches
+DGE_import_200609 <- readDGE(files, columns=c(1,2))
+
+# tidy up sample names
+samplename <- sub("_P.R1_deduplicated_mir_counts", "",colnames(DGE_import_200609$counts))
+samplename <- sub("rawData\\/200609_plasma\\/", "",samplename)
+samplename <- sub("_", "",samplename)
+colnames(DGE_import_200609) <- samplename
+
+counts_200609 <- DGE_import_200609$counts
+    
+genes <- rownames(counts_200609)
+
+```
+
+# Import sample data
+
+```{r import sample metadata}
+
+simpleMetaData <- read_csv("cleanData/simpleMetaData.csv") %>% 
+  dplyr::select(., samplename, gestationalAge = gestationPlus)
+
+basicMetadata <- read.csv(here("cleanData/basicMetadata.csv"),
+                          header = TRUE) %>% 
+  subset(., samplename %in% colnames(counts_200609)) %>% 
+    as.data.frame() %>% 
+  dplyr::select(., samplename, CohortCode, simpleOutcome, maternalAge, BMI, smoker = Smoking.Status, fetal_sex = Fetal.Sex, ethnicity = Ethnicity) %>% 
+  left_join(., simpleMetaData, by = "samplename") %>% 
+  dplyr::mutate(., processGroup = "groupC")
+basicMetadata$gestationalAge[is.na(basicMetadata$gestationalAge)] <- 0
+
+```
+
+# Import PAC plasma counts data
+
+```{r import PAC plasma}
+
+files_PAC <- c("rawData/counts_hg38/PAC0006_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0056_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0007_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0057_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0008_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0058_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0009_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0059_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0010_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0060_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0011_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0062_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0012_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0063_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0013_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0064_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0014_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0065_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0015_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0069_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0016_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0070_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0017_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0071_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0018_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0072_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0020_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0074_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0021_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0075_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0022_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0076_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0023_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0077_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0024_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0078_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0025_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0083_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0026_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0084_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0027_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0086_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0029_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0087_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0030_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0088_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0031_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0091_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0032_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0093_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0033_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0097_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0034_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0098_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0035_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0099_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0036_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0100_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0037_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0102_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0038_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0103_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0039_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0105_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0040_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0107_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0041_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0108_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0042_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0109_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0043_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0111_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0044_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0114_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0045_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0117_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0046_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0118_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0047_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0120_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0048_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0122_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0049_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0124_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0050_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0127_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0051_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0129_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0052_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0131_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0053_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0134_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0054_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0139_deduplicated_mir_counts.tsv",
+"rawData/counts_hg38/PAC0055_deduplicated_mir_counts.tsv", "rawData/counts_hg38/PAC0140_deduplicated_mir_counts.tsv")
+
+# test
+read.delim(files_PAC[1], nrow=5)
+
+# establish DGEList object - all batches
+DGE_import_PAC <- readDGE(files_PAC, columns=c(1,2))
+
+# tidy up sample names
+samplename <- sub("rawData\\/counts_hg38\\/", "",colnames(DGE_import_PAC$counts))
+samplename <- sub("_deduplicated_mir_counts", "",samplename)
+colnames(DGE_import_PAC) <- samplename
+
+counts_PAC <- DGE_import_PAC$counts
+    
+genes_PAC <- rownames(DGE_import_PAC)
+
+samples_PAC <- readRDS(here("cleanData/samples.Rds")) %>% 
+  dplyr::mutate(., simpleOutcome = "unkown") %>%
+  dplyr::mutate(., CohortCode = "PAC") %>% 
+  dplyr::select(., samplename, CohortCode, simpleOutcome, maternalAge, BMI, smoker, fetal_sex = updatedFetalSex, ethnicity, gestationalAge = gestationPlus, processGroup)
+samples_PAC$gestationalAge <- gsub("\\+", "", samples_PAC$gestationalAge)
+
+```
+
+## Import haemolysis test results
+
+```{r import haemolysis results}
+
+raw_cq_180111 <- read_csv(here("cleanData/raw_Cq_values_QC10137.csv"),
+                     col_names = TRUE) %>%
+  dplyr::select(order(colnames(.)))
+
+raw_cq_200609 <- read_csv(here("cleanData/raw_Cq_values_QNS30165.csv"),
+                     col_names = TRUE) %>%
+  dplyr::select(order(colnames(.)))
+
+combined_raw_cq <- rbind(raw_cq_180111, raw_cq_200609) %>% 
+  dplyr::select(., samplename, everything())
+
+```
+
+# combine counts & metadata
+
+```{r combine counts and metadata}
+
+# combine counts
+expression <- full_join(as.data.frame(counts_200609) %>% 
+                               tibble::rownames_to_column("miRNA"),
+                             as.data.frame(counts_PAC) %>% 
+                               tibble::rownames_to_column("miRNA"),
+                             by = "miRNA") %>% 
+  tibble::column_to_rownames("miRNA") %>% 
+  as.matrix()
+# replace and NAs introduced with a zero
+expression[is.na(expression)] <- 0
+# ensure the columns are ordered by assending sample name
+expression <- expression[,order(colnames(expression),decreasing=FALSE)]
+
+# combined metadata
+combined_samples <- rbind(samples_PAC, basicMetadata) %>% 
+  arrange(., samplename)
+
+## Fix up columns were names aren't consistent between metadata sheets
+combined_samples$simpleOutcome <- as.character(combined_samples$simpleOutcome)
+combined_samples$simpleOutcome[which(combined_samples$simpleOutcome == "unkown")] = "Unknown"
+
+combined_samples$fetal_sex <- as.character(combined_samples$fetal_sex)
+combined_samples$fetal_sex[which(combined_samples$fetal_sex == "M")] = "XY"
+combined_samples$fetal_sex[which(combined_samples$fetal_sex == "F")] = "XX"
+
+## Make sure the factors are as I want them
+combined_samples$fetal_sex <- factor(combined_samples$fetal_sex, c("notPreg", "XX", "XY"))
+combined_samples$processGroup <- factor(combined_samples$processGroup, c("groupA", "groupB", "groupC"))
+
+# Add the delta Cq results to the sample metadata
+
+combined_samples <- left_join(combined_samples, combined_raw_cq, by = "samplename")
+
+miRNA_per_sample <- data.frame(t(numcolwise(nonzero)(as.data.frame(expression)))) %>%
+  tibble::rownames_to_column() %>%
+  set_colnames(., c("samplename", "unique_miRs")) %>%
+  arrange(., desc(unique_miRs)) %>%
+  mutate(., uniqueRank = 1:nrow(combined_samples))
+
+# quick scatterplot of counts
+ggplot(data = as.data.frame(colSums(expression)) %>% 
+         tibble::rownames_to_column() %>%
+         set_colnames(c("samplename", "sampleSum")) %>%
+         left_join(., combined_samples, by = "samplename") %>%
+         dplyr::select(., samplename, sampleSum)) +
+  geom_point(aes(x = samplename, y = sampleSum, colour = combined_samples$processGroup)) +
+  geom_hline(yintercept = 5000000) +
+  theme_bw() +
+  ggtitle("Raw library size - plasma counts") +
+  theme(axis.text.x = element_text(angle = 270, hjust = 1))
+
+
+```
+
+## Add haemolysis results to sample metadata
+- QIAGEN: PAC0033, PAC0034, PAC0041, PAC0048, PAC0050, PAC0051, PAC0054, PAC0056, PAC0062, PAC0084 and PAC0105 (PAC0022 = exhausted sample)
+- QIAGEN_200609: PAC0121, PAC0068, PAC0110
+
+```{r add hemolysis to metadata}
+
+combined_samples <- combined_samples %>% 
+  dplyr::mutate(., haemolysis = ifelse(samplename %in% c("PAC0033", "PAC0034", "PAC0041", "PAC0048", "PAC0050", "PAC0051", "PAC0054", "PAC0056", "PAC0062", "PAC0084", "PAC0105", "PAC0121", "PAC0068", "PAC0110"), "haemolysed",
+                                        ifelse(samplename %notin% c("PAC0033", "PAC0034", "PAC0041", "PAC0048", "PAC0050", "PAC0051", "PAC0054", "PAC0056", "PAC0062", "PAC0084", "PAC0105", "PAC0121", "PAC0068", "PAC0110"), "none", NA)))
+
+combined_samples$haemolysis <- factor(combined_samples$haemolysis, c("none", "haemolysed"))
+```
+
+# Filter sequencing noise   
+
+* Here any individual observation with less than five counts is considered to be sequencing noise and is reduced to zero and removed by filtering.  
+  * Counts less than 5 reduced to 0
+  * Logic check and record how many miRs will be filtered
+  * Filter to remove miRs with zero counts in all samples
+
+```{r filterSeqNoise}
+
+# reduce any individual count less than five to zero
+expression[expression < 5] <- 0
+# check to establish if any miRNA have no expression across all samples
+table(rowSums(expression == 0) == ncol(expression))
+  
+# remove miRNAs with zero counts in all samples
+expression <- expression[ rowSums(expression)!=0, ]
+
+# Test if any NAs introduced
+is.na(expression) %>% table()
+
+```
+
+# Establish DGEList
+
+```{r DGElist}
+
+genes <- rownames(expression) %>% 
+  as.data.frame() %>% 
+  set_colnames("SYMBOL")
+
+DGElist_plasma <- DGEList(counts = expression,
+                          samples = combined_samples,
+                          genes = genes)
+
+is.na(DGElist_plasma$counts) %>% table()
+
+```
+
+# TMM normalisation of libraries
+
+Before differential expression analysis the sample libraries need to be normalised to account for differences in initial library size.     
+Normalising the libraries allows for the direct comparison between samples.   
+Here the Trimmed Mean of M Values method is used.   
+
+```{r TMM}
+
+# Plot the distribution of (low count filtered) counts prior to normalisation 
+nsamples <- ncol(DGElist_plasma)
+# set up colours for the density plots
+col <- colorRampPalette(brewer.pal(11,"Spectral"))(ncol(DGElist_plasma))
+lcpm <- cpm(DGElist_plasma, log = TRUE)
+boxplot(lcpm, las = 2, col = col, main = "")
+title(main = "DGElist_plasma: Un-normalised data (n=153)",ylab = "Log-cpm") 
+
+# calculate normalisation factors and apply to the DGEList object
+DGElist_plasma <- calcNormFactors(DGElist_plasma, method = "TMM")
+
+```
+
+# Filter biological noise and plot
+ 
+```{r filter bionoise}
+
+# calculate the cpm value of a read count of 10 given the mean library size (to be used in the keep.genes)
+cpm(40, mean(DGElist_plasma$samples$lib.size))
+
+# new df of unfiltered cpm for the reduced DGEList
+rawCpm_plasma <- cpm(DGElist_plasma, log = FALSE)
+
+# new df of unfiltered log 2 cpm for the reduced DGEList
+rawlcpm_plasma <- cpm(DGElist_plasma, log = TRUE)
+
+## The density of log-CPM values for pre-filtered data 
+# (A) and post-filtered data 
+# (B) are shown for each sample. 
+## Dotted vertical lines mark the log-CPM of 1 threshold 
+# (equivalent to a CPM value of 2) used in the filtering step.
+nsamples <- ncol(DGElist_plasma)
+
+par(mfrow=c(1,1))
+
+# colour by haemolysis
+col.hemo <- DGElist_plasma$samples$haemolysis
+levels(col.hemo) <- brewer.pal(nlevels(col.hemo), "Set2")
+col.hemo <- as.character(col.hemo)
+
+plot(density(rawlcpm_plasma[,1]), col = col.hemo[1], lwd = 2, ylim = c(0, 0.80), las = 2,
+  main = "", xlab = "")
+title(main = "DGEList_plasma Unfiltered data", xlab = "Log-cpm") 
+abline(v = 1, lty = 3)
+for (i in 1:nsamples){
+  den <- density(rawlcpm_plasma[,i])
+  lines(den$x, den$y, col = col.hemo[i], lwd = 2)
+}
+
+# remove low expressed genes
+keep.exprs <- rowSums(rawCpm_plasma > 40) >= 14
+DGElist_plasma <- DGElist_plasma[keep.exprs,, keep.lib.sizes = FALSE]
+
+filtered_lcpm <- cpm(DGElist_plasma, log=TRUE)
+
+plot(density(filtered_lcpm[,1]), col = col.hemo[1], lwd = 2, ylim = c(0, 0.20), las = 2,
+  main = "", xlab = "")
+title(main = "DGEList_plasma Filtered data (20cpm)", xlab = "Log-cpm") 
+abline(v = 1, lty = 3)
+for (i in 1:nsamples){
+  den <- density(filtered_lcpm[,i])
+lines(den$x, den$y, col = col.hemo[i], lwd = 2)
+}
+
+par(mfrow=c(1,1))
+# Distribution of normalised and filtered counts data
+boxplot(cpm(DGElist_plasma, log = TRUE), las = 2, col = col, main = "")
+title(main = "DGEList_plasma: Normalised data",ylab = "Log-cpm")
+
+```
+
+## Identify outlier samples
+
+```{r identify outlier samples}
+
+# calculate pearson correlation
+cc <- cor(DGElist_plasma$counts)
+cc <- cor(cpm(DGElist_plasma, log = FALSE))
+# use correlation as a distance measure
+dend <- as.dendrogram(hclust(as.dist(1-cc)))
+batch <- DGElist_plasma$samples$processGroup
+useries <- unique(batch)
+series_match <- useries[match(batch, useries)]
+
+# set up colours for the dendrogram
+colos <- colorspace::rainbow_hcl(length(useries), c = 160, l = 50)
+names(colos) <- useries
+series_color <- colos[series_match]
+
+# set distance to create cluster
+clu <- cutree(dend, h=0.25)
+labels_colors(dend) <- series_color[order.dendrogram(dend)]
+dend <- color_branches(dend, h=0.25)
+
+par(mar=c(4, 1, 1, 12))
+plot(dend, horiz = TRUE)
+colored_bars(cbind(clu, series_color), dend, rowLabels = c("Cluster", "batch"), horiz = TRUE)
+legend("topleft", legend = useries, fill = colos, bg="white", cex=0.6)
+
+largest_cluster <- names(rev(sort(table(clu))))[1]
+ww <- which(clu == largest_cluster)
+plot(density(cor(DGElist_plasma$counts[,ww])), lwd=3, main = "correlation of leftover samples")
+
+reduced_exp <- DGElist_plasma$counts[,ww]
+reduced_series <- series_match[ww]
+
+cluster_info <- data.frame(clu) %>% 
+  tibble::rownames_to_column("samplename") %>% 
+  full_join(., DGElist_plasma$samples, by = "samplename")
+
+```
+
+## PCA expression before batch correction
+
+```{r PCA}
+
+# perform pca using prcomp
+# nb: prcomp expects samples in rows and counts in columns
+pca <- prcomp(t(DGElist_plasma$counts), 
+              scale = TRUE)  # add the scale = true to account for expression size
+
+## plot pc1 and pc2
+# x contains the pc's
+plot(pca$x[,1], pca$x[,2])
+ 
+## make a scree plot
+# sdev^2 used to calculate how much variation each pc accounts for
+pca.var <- pca$sdev^2
+# calculate sdev^2 as a percentage of total variation
+pca.var.per <- as.data.frame(round(pca.var/sum(pca.var)*100, 1)) %>%
+  set_colnames(., "PC_Percent") %>%
+  mutate(., PC = as.factor(paste("PC-", 1:length(pca.var), sep="")))
+lvls <- levels(pca.var.per$PC)
+vline.level <- 'PC-28'
+
+# Scree plot 
+ggplot(data = pca.var.per) +
+  geom_point(aes(x = reorder(PC, -PC_Percent), 
+                 y = PC_Percent)) +
+  ggtitle("Plasma PCA Scree plot") +
+  theme_bw(base_size = 16) +
+  labs(x = "Principal Component") +
+  theme(axis.text.x = element_text(angle = 270, hjust = 1)) # + 
+  # geom_vline(xintercept = which(lvls == vline.level) - 0.5, col='red', lwd=1) +
+  # annotate("text", x = 10, y = 25, label = "<- 80.2% ->", colour = "red")
+
+
+# extract PC1&2 and plot - colour = sequencing batch
+data.frame(samplename = rownames(pca$x),
+  X = pca$x[,1],
+  Y = pca$x[,2]) %>%
+  left_join(., DGElist_plasma$samples, by = "samplename") %>%
+  select(., samplename, X, Y, gestationalAge, processGroup, fetal_sex, haemolysis) %>%
+ggplot(aes(x = X, 
+           y = Y, 
+           label = samplename,
+           colour = processGroup,
+           shape = haemolysis,
+           size = 6)) +
+  # geom_text() +
+  geom_point(size = 8) +
+  scale_color_discrete(name = "Process Group") +
+  scale_shape_discrete(name = "Haemolysis Status",
+                       breaks = c("none", "haemolysed"),
+                       labels = c("none", "haemolysed")) +
+  scale_size_continuous(name = NULL,
+                        breaks = NULL,
+                        labels = NULL) +
+  xlab(paste("PC1 - ", pca.var.per[1,1], "%", sep="")) +
+  ylab(paste("PC2 - ", pca.var.per[2,1], "%", sep="")) +
+  theme_bw(base_size = 18) +
+  theme(axis.text.x = element_text(colour="black")) +
+  theme(legend.title = element_text(color = "black", size = 16),
+        legend.text = element_text(color = "black", size = 14)) +
+  theme(legend.key.size = unit(1,"line"))
+
+
+
+## get the name of the top 10 measurements (miRs) that contribute
+## most to pc1. nb: prcomp calls loading scores "rotation"
+## miRs pushing samples to the left will have large negative values
+## miRs pusing samples to the right will have large positive values
+loading_scores <- pca$rotation[,1]
+miR_scores <- abs(loading_scores) ## get the magnitudes
+miR_score_ranked <- sort(miR_scores, decreasing=TRUE)
+top_20_miRs <- names(miR_score_ranked[1:20])
+ 
+top_20_miRs ## show the names of the top 20 miRs
+ 
+pca$rotation[top_20_miRs,1] ## show the scores (and +/- sign)
+
+```
+
+## Batch correction - limmaRemoveBatchEffect
+
+# Remove batch effects
+  * limma::removeBatchEffect(x, batch=NULL, batch2=NULL, covariates=NULL,
+                  design=matrix(1,ncol(x),1), ...)
+    + x = log expression values for a series of samples
+    + batch = factor or vector indicating batches
+    + batch2 = optional factor or vector indicating a second series of batches
+    + covariates = matrix or vector of numeric covariates to be adjusted for
+    + design = optional design matrix relating to treatment conditions to be preserved
+    + ... = other arguments passed to lmfit
+    
+## Remove batch effects *without* covariates or design matrix
+
+```{r limma remove batch effect}
+
+# create an object containing log cpm counts (log counts are expected here)
+lcpm <- edgeR::cpm(DGElist_plasma, log = TRUE, prior.count = 3)
+# apply limma::removeBatchEffects
+correctedCounts <- limma::removeBatchEffect(lcpm, batch = DGElist_plasma$samples$processGroup)
+
+# MDS of batch corrected counts
+col.hemo <- c("red", "blue")[DGElist_plasma$samples$haemolysis]
+
+col.batch <- c("orange","purple","light green")[DGElist_plasma$samples$processGroup]
+
+# plot
+plotMDS(lcpm, dim.plot = c(1,2), 
+        labels = DGElist_plasma$samples$samplename,
+        col = col.batch, 
+        pch = 20, cex = 1.4)
+legend("bottomleft",
+       fill=c("orange","purple","light green"),
+       legend=levels(DGElist_plasma$samples$processGroup),
+       cex=0.8)
+title(main = "Plasma: Multi Dimensional Scaling Plot \n(batch corrected data)")
+
+
+```
+
+## Mean centred counts
+
+```{r mean centred counts}
+
+## mean centre the corrected counts
+meanCentre <- correctedCounts %>% 
+  data.frame() %>% 
+  tibble::rownames_to_column("mirna") %>% 
+  dplyr::mutate(., non_haemo_mean = rowMeans(dplyr::select(., -c(mirna, PAC0033, PAC0034, PAC0041, PAC0048, PAC0050, PAC0051, PAC0054, PAC0056, PAC0062, PAC0084, PAC0105, PAC0121, PAC0068, PAC0110)))) %>% # calculate the mean for non-haemolysed samples only
+  dplyr::mutate(., haemo_mean = rowMeans(dplyr::select(., c(PAC0033, PAC0034, PAC0041, PAC0048, PAC0050, PAC0051, PAC0054, PAC0056, PAC0062, PAC0084, PAC0105, PAC0121, PAC0068, PAC0110)))) %>% # calculate the mean for haemolysed samples only
+  dplyr::rowwise() %>% 
+  dplyr::mutate(mean = mean(c(non_haemo_mean, haemo_mean), na.rm = TRUE)) %>% 
+  dplyr::select(., mirna, mean, non_haemo_mean, haemo_mean)
+
+meanCentredCounts <- sweep(correctedCounts[meanCentre$mirna,], 1, meanCentre$mean, "-")
+
+# heatmap of miRNA up-regulated in the haemolysed samples.
+# centred_haemo_up <- meanCentredCounts %>%
+#   as.data.frame() %>% 
+#   tibble::rownames_to_column("SYMBOL") %>% 
+#   subset(., SYMBOL %in% filter(topTable_hemo, logFC > 0)[,"SYMBOL"])
+# rownames(centred_haemo_up) <- centred_haemo_up$SYMBOL
+# centred_haemo_up <- centred_haemo_up %>% 
+#   dplyr::select(., -SYMBOL)
+# # reduce any individual count less than four to zero
+# centred_haemo_up[centred_haemo_up < -4] <- -4
+# centred_haemo_up[centred_haemo_up > 4] <- 4
+# 
+# # create annotations
+# a <- DGElist_plasma$samples[, c("samplename","haemolysis", "miR23a.miR451a")]
+# rownames(a) <- a$samplename
+# a$samplename <- NULL
+# 
+# pheatmap(centred_haemo_up,
+#          annotation_col = a)
+
+```
+
+# PCA batch corrected and centred counts
+
+```{r PCA_noHV}
+
+# perform pca using prcomp
+# nb: prcomp expects samples in rows and counts in columns
+pca <- prcomp(t(correctedCounts), 
+              scale = TRUE)  # add the scale = true to account for expression size
+
+## plot pc1 and pc2
+# x contains the pc's
+plot(pca$x[,1], pca$x[,2])
+ 
+## make a scree plot
+# sdev^2 used to calculate how much variation each pc accounts for
+pca.var <- pca$sdev^2
+# calculate sdev^2 as a percentage of total variation
+pca.var.per <- as.data.frame(round(pca.var/sum(pca.var)*100, 1)) %>%
+  set_colnames(., "PC_Percent") %>%
+  mutate(., PC = as.factor(paste("PC-", 1:length(pca.var), sep="")))
+lvls <- levels(pca.var.per$PC)
+vline.level <- 'PC-28'
+
+# Scree plot 
+ggplot(data = pca.var.per) +
+  geom_point(aes(x = reorder(PC, -PC_Percent), 
+                 y = PC_Percent)) +
+  ggtitle("Plasma PCA Scree plot") +
+  theme_bw(base_size = 16) +
+  labs(x = "Principal Component") +
+  theme(axis.text.x = element_text(angle = 270, hjust = 1)) # + 
+  # geom_vline(xintercept = which(lvls == vline.level) - 0.5, col='red', lwd=1) +
+  # annotate("text", x = 10, y = 25, label = "<- 80.2% ->", colour = "red")
+
+
+# extract PC1&2 and plot - colour = sequencing batch
+data.frame(samplename = rownames(pca$x),
+  X = pca$x[,1],
+  Y = pca$x[,2]) %>%
+  left_join(., DGElist_plasma$samples, by = "samplename") %>%
+  select(., samplename, X, Y, gestationalAge, processGroup, fetal_sex, haemolysis, miR23a.miR451a) %>%
+ggplot(aes(x = X, 
+           y = Y, 
+           label = samplename,
+           colour = processGroup,
+           shape = haemolysis,
+           size = 6)) +
+  
+  # add repelled labels to the haemolysed samples
+  geom_text_repel(data = . %>% 
+                    mutate(label = ifelse(haemolysis == "haemolysed", samplename, "")),
+                                          aes(label = label),
+                  box.padding = 2) +
+  geom_point(size = 8) +
+  scale_color_discrete(name = "Process Group") +
+  scale_shape_discrete(name = "Haemolysis Status",
+                       breaks = c("none", "haemolysed"),
+                       labels = c("clear", "haemolysed")) +
+  scale_size_continuous(name = NULL,
+                        breaks = NULL,
+                        labels = NULL) +
+  xlab(paste("PC1 - ", pca.var.per[1,1], "%", sep="")) +
+  ylab(paste("PC2 - ", pca.var.per[2,1], "%", sep="")) +
+  
+  # make it easier to read
+  theme_bw(base_size = 18) +
+  theme(axis.text.x = element_text(colour="black")) +
+  theme(legend.title = element_text(color = "black", size = 16),
+        legend.text = element_text(color = "black", size = 14)) +
+  theme(legend.key.size = unit(1,"line"))
+
+
+## get the name of the top n measurements (miRs) that contribute
+## most to pc1. nb: prcomp calls loading scores "rotation"
+## miRs pushing samples to the left will have large negative values
+## miRs pushing samples to the right will have large positive values
+loading_scores <- pca$rotation[,1]
+miR_scores <- abs(loading_scores) ## get the magnitudes
+miR_score_ranked <- sort(miR_scores, decreasing=TRUE)
+top_20_miRs <- names(miR_score_ranked[1:20])
+top_100_miRs <- names(miR_score_ranked[1:100])
+
+top_20_miRs ## show the names of the top 20 miRs
+ 
+PC1_miRs_sign <- pca$rotation[,1] %>%  ## show the scores (and +/- sign)
+  as.data.frame() %>% 
+  tibble::rownames_to_column() %>% 
+  set_colnames(c("SYMBOL", "rotation")) %>%
+  filter(., rotation < 0) %>% 
+  arrange(., rotation)
+
+# saveRDS(PC1_miRs_sign, file = here("cleanData/PC1_mirs.rds"))
+
+
+data.frame(samplename = rownames(pca$x),
+  X = pca$x[,1],
+  Y = pca$x[,2]) %>%
+  left_join(., DGElist_plasma$samples, by = "samplename") %>%
+  select(., samplename, X, Y, gestationalAge, processGroup, fetal_sex, haemolysis, miR23a.miR451a) %>%
+  
+  # make scatter plot
+  ggplot(aes(x = X,
+             y = Y,
+             colour = miR23a.miR451a,
+             size = 6)) +
+  geom_point() +
+  scale_colour_stepsn(colours = terrain.colors(10), n.breaks = 4) +
+    # make it easier to read
+  theme_bw(base_size = 18) +
+  theme(axis.text.x = element_text(colour="black")) +
+  theme(legend.title = element_text(color = "black", size = 16),
+        legend.text = element_text(color = "black", size = 14)) +
+  theme(legend.key.size = unit(1,"line"))
+
+
+
+```
+
+## Access the PCA results
+
+```{r PCA_results}
+
+# Eigenvalues
+eig.val <- get_eigenvalue(pca)
+eig.val
+  
+# Results for Variables
+res.var <- get_pca_var(pca)
+res.var$coord          # Coordinates
+res.var$contrib        # Contributions to the PCs
+res.var$cos2           # Quality of representation 
+
+# Results for individuals
+res.ind <- get_pca_ind(pca)
+res.ind$coord          # Coordinates
+res.ind$contrib        # Contributions to the PCs
+res.ind$cos2           # Quality of representation
+
+# determine which miRNAs contribute the most to dimension 1
+## Dim1 seems to plot from left (younger) to right (older)
+dim1.contr <- as.data.frame(res.var$contrib[, 1]) %>% 
+  tibble::rownames_to_column() %>% 
+  arrange(., desc(res.var$contrib[, 1])) %>%
+  set_colnames(c("miRNA", "dim1.contr"))
+
+dim1.coord <- as.data.frame(res.var$coord[, 1]) %>% 
+  tibble::rownames_to_column() %>% 
+  set_colnames(c("miRNA", "dim1.coord"))
+
+dim1.miRs <- full_join(dim1.contr, dim1.coord, by = "miRNA")
+## save as excell table for paper
+write.table(dim1.miRs, file = here("Documents/dim1.miRs.csv"),
+            sep = ",",
+            row.names = FALSE)
+
+print(dim1.miRs[1:20,])
+
+# determine which miRNAs contribute the most to dimension 2
+## Dim2 also seems to plot from bottom (younger) to top (older)
+dim2.contr <- as.data.frame(res.var$contrib[, 2]) %>% 
+  tibble::rownames_to_column() %>% 
+  arrange(., desc(res.var$contrib[, 2])) %>%
+  set_colnames(c("miRNA", "dim2.contr"))
+
+dim2.coord <- as.data.frame(res.var$coord[, 2]) %>% 
+  tibble::rownames_to_column() %>% 
+  set_colnames(c("miRNA", "dim2.coord"))
+
+dim2.miRs <- full_join(dim2.contr, dim2.coord, by = "miRNA")
+
+print(dim2.miRs[1:20,])
+
+```
