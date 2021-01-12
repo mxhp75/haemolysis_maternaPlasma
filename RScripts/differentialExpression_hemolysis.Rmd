@@ -43,12 +43,11 @@ library(plotly)
 library(ggrepel)
 library(GGally)
 library(tidyHeatmap)
-# library(tidybulk)
 library(magrittr)
 library(ggpubr)
 library(ggalt)
 
-
+# other packages
 library(stringr)
 library(edgeR)
 library(pander)
@@ -60,7 +59,7 @@ library(preprocessCore)
 library(dendextend)
 library(sva)
 library(quantro)
-# Compute descriptive statistics
+library(caret)
 library(pastecs)
 library(here)
 
@@ -239,6 +238,8 @@ expression <- expression[,order(colnames(expression),decreasing=FALSE)]
 # combined metadata
 combined_samples <- rbind(samples_PAC, basicMetadata) %>% 
   arrange(., samplename)
+# coerce gestationalAge from character to numeric
+combined_samples$gestationalAge <- as.numeric(combined_samples$gestationalAge)
 
 ## Fix up columns were names aren't consistent between metadata sheets
 combined_samples$simpleOutcome <- as.character(combined_samples$simpleOutcome)
@@ -410,7 +411,28 @@ rank <- as.data.frame(colSums(expression)) %>%
               arrange(., desc(unique_miRs)) %>%
               mutate(., rank_unique = 1:nrow(.)),
             by = "samplename")
+
+ggplot(data = rank,
+       aes(x = readCounts,
+           y = unique_miRs,
+           colour = haemolysis,
+           size = 4)) +
+  scale_size(guide = "none") +
+  geom_point() +
+  scale_x_continuous(name = "Filtered Read Counts",
+                     breaks = seq(1000000, 19000000, 500000)) +
+  scale_y_continuous(name = "Mature miRNA Identified",
+                     breaks = seq(250, 800, 50)) +
+  stat_smooth(method = 'loess',
+              se = FALSE) +
+  theme_bw(base_size = 16) +
+  theme(axis.text.x = element_text(angle = 270, hjust = 1))
   
+## test to see if the difference is significant
+haemolysis_anova <- aov(readCounts ~ unique_miRs * haemolysis,
+                data = rank)
+summary(haemolysis_anova)
+
 # and now lets see which miRNA are added incrementally when we increase the reads
 # first we need to re-order the columns by readCounts - highest to lowest.
 temp <- rownames(as.data.frame(expression[,rank$samplename]) %>% dplyr::na_if(., 0) %>% filter(., !is.na(.[,1])))
@@ -1143,8 +1165,47 @@ pheatmap(cpm_haemo_up[,DGElist_plasma$samples$samplename],
 #          annotation_col = a,
 #          scale = "row")
 
+
+## Plot individual miRs from batch corrected data
+
+moi <- 'hsa-miR-122-5p'
+
+as.data.frame(correctedCounts[moi, ]) %>%
+  set_colnames(moi) %>% 
+  tibble::rownames_to_column("samplename") %>% 
+  left_join(., DGElist_plasma$samples[, c("samplename", "gestationalAge", "haemolysis", "CohortCode")], by = "samplename") %>% 
+  arrange(., gestationalAge) %>%
+  ggplot() +
+  geom_point(aes(y = get(moi),
+                 x = gestationalAge,
+                 colour = haemolysis,
+                 size = 6)) +
+  scale_size(guide = "none") +
+    labs(title = paste(moi, "Scatterplot of pseudo log2 corrected counts"),
+       x = "Gestational Age (weeks of gestation)",
+       y = paste(moi, "log2 cpm")) +
+  theme_bw(base_size = 16)
+
+as.data.frame(correctedCounts[moi, ]) %>%
+  set_colnames(moi) %>% 
+  tibble::rownames_to_column("samplename") %>% 
+  left_join(., DGElist_plasma$samples[, c("samplename", "gestationalAge", "haemolysis", "CohortCode")], by = "samplename") %>% 
+  dplyr::mutate(cohort_haemolysis = paste(CohortCode, haemolysis, sep = "_")) %>% 
+  arrange(., gestationalAge) %>%
+  ggplot() +
+  geom_boxplot(aes(x = cohort_haemolysis,
+                   y = get(moi),
+                   colour = haemolysis)) +
+  scale_size(guide = "none") +
+    labs(title = paste(moi, "Scatterplot of pseudo log2 corrected counts"),
+       x = "Cohort + Haemolysis",
+       y = paste(moi, "log2 cpm")) +
+  theme_bw(base_size = 16)
+
+
 ```
 
+# COMBAT batch correction if needed
 
 ```{r combat batch correction}
 
@@ -1240,14 +1301,14 @@ pheatmap(centred_haemo_up,
 
 ```
 
-## Classifier miRs
+# Classifier miRs
 
 ```{r classifier miRs}
 # what makes a good classifier?
 
 # miRs that are up-regulated in the DE
 # keep only miRs that are significantly higher in haemolysed samples
-up_miRs <- filter(topTable_hemo, logFC > 0.9) %>%
+up_miRs <- filter(topTable_hemo, logFC > 0.0) %>%
   
   # get rid of the columns we don't need
   dplyr::select(., SYMBOL, logFC, AveExpr, adj.P.Val) %>% 
@@ -1262,7 +1323,7 @@ up_miRs <- filter(topTable_hemo, logFC > 0.9) %>%
   dplyr::select(., SYMBOL, logFC, rank_logFC, AveExpr, rank_AveExpr, adj.P.Val, rank_adj.P.Val)
 
 # select the "top 60" miRs from each of the rank lists and join them back together
-top_DE_classifier <- dplyr::filter(up_miRs[,c("SYMBOL", "logFC", "rank_logFC")], between(rank_logFC, 1, 60)) %>% 
+top_DE_classifier <- dplyr::filter(up_miRs[,c("SYMBOL", "logFC", "rank_logFC")], logFC > 0.9) %>% 
   full_join(., dplyr::filter(up_miRs[,c("SYMBOL", "AveExpr", "rank_AveExpr")], between(rank_AveExpr, 1, 60)), by = "SYMBOL") %>% 
   full_join(., dplyr::filter(up_miRs[,c("SYMBOL", "adj.P.Val", "rank_adj.P.Val")], between(rank_adj.P.Val, 1, 60)), by = "SYMBOL")  %>%
   mutate_if(is.numeric, round, digits=3)
@@ -1281,11 +1342,11 @@ top_DE_classifier <- top_DE_classifier[complete.cases(top_DE_classifier), ]
 
 pheatmap(subset(centred_haemo_up, rownames(centred_haemo_up) %in% top_DE_classifier$SYMBOL),
          annotation_col = a,
-         cutree_cols = 5,
-         cutree_rows = 3,
+         # cutree_cols = 5,
+         # cutree_rows = 3,
          fontsize = 8)
 
-## join miRs DE between pregnant and non-pregnant DE -> only keep miRs not significant in the pregancy comparison
+## join miRs DE between pregnant and non-pregnant DE -> only keep miRs not significant in the pregnancy comparison
 combined_mirs_plus_pregnancy <- left_join(top_DE_classifier, topTable_pregnancy_noHaemo, by = "SYMBOL") %>% 
   .[!complete.cases(.),]
 
@@ -1354,6 +1415,12 @@ ggplot(data = temp,
              linetype = "dotted") +
   geom_hline(yintercept = 1,
              linetype = "dotted") +
+  # add samplenames to the samples with y-intercept > 1 but not over dCq 7
+  geom_text_repel(data = filter(temp,
+                                haemolysis == "none" &
+                                  y_int_diff > 1),
+                  box.padding = 3,
+                  aes(label = samplename)) +
   theme_bw()
 
 ## add a column indicating the classifier miRs
@@ -1364,7 +1431,6 @@ non_hemo_means <- non_hemo_means %>%
 ## calculate the difference between the mean of the classifier miRs and all other miRs
 y_int_diff_classifier <- lapply(varc, function(x){
   d <- non_hemo_means[, c("non_haemo_mean", x, "classifier")]
-  # levels(d$hemo)[1:2] <- 0
   
   fe <- as.formula(paste0(x, "~ non_haemo_mean + classifier"))
   f <- eval(bquote(lm(.(fe), data=d)))
@@ -1473,11 +1539,11 @@ p <- non_hemo_means %>%
 
 ```
 
-## Plotting side by side distributions - 16 classifier miRs
+## Plotting side by side distributions - classifier miRs
 
 ```{r plotting distributions}
 
-plotVar <- "NPC0063"
+plotVar <- "PAC0063"
 
 cdat <- ddply(dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log=TRUE)), plotVar) %>%
   tibble::rownames_to_column("mirna") %>% 
@@ -1498,8 +1564,8 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
                  colour = as.factor(classifier),
                  linetype = "dashed"),
              show.legend = FALSE) +
-  labs(title = paste(plotVar, "Denisty of CPM counts"),
-       subtitle = "Smallest dCq",
+  labs(title = paste(plotVar, "Denisty of CPM counts (10)"),
+       subtitle = "smallest dCq",
        x = "log2 CPM Counts",
        y = "Density") +
   scale_fill_discrete(name = "Classifier \nStatus", labels = c("Non-Classifier", "Classifier")) +
@@ -1517,8 +1583,8 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
                  colour = as.factor(classifier),
                  linetype = "dashed"),
              show.legend = FALSE) +
-  labs(title = paste(plotVar, "Histogram of CPM counts"),
-       subtitle = "Smallest dCq",
+  labs(title = paste(plotVar, "Histogram of CPM counts (10)"),
+       subtitle = "smallest dCq",
        x = "log2 CPM Counts",
        y = "Count") +
   scale_fill_discrete(name = "Classifier \nStatus", labels = c("Non-Classifier", "Classifier")) +
@@ -1527,7 +1593,7 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
 print(cdat[2, 2] - cdat[1, 2])
 ```
 
-## calculate the difference between the median of the distributions for all samples - 18 classifier miRs
+## calculate the difference between the median of the distributions for all samples - 10 classifier miRs
 
 ```{r calculate median difference reduced classifier list}
 
@@ -1535,7 +1601,7 @@ print(cdat[2, 2] - cdat[1, 2])
 varc <- dplyr::select(DGElist_plasma$samples, samplename) %>%
   dplyr::pull(., samplename)
 
-
+# calculate the distribution difference between the final classifier miRs (ie after removing pregnancy associated)
 distributionDifference <- lapply(varc, function(x){
  # calculate the median of the two distributions (1 = classifier, 0 = other) 
   cdat <- ddply(
@@ -1560,10 +1626,10 @@ unlist_distributionDifference <- do.call(cbind.data.frame, distributionDifferenc
 
 ```
 
-## Plotting side by side distributions - 36 classifier miRs
+## Plotting side by side distributions - top DE classifier miRs (keep pregnancy associated in)
 
 ```{r }
-plotVar <- "PAC0063"
+plotVar <- "PAC0110"
 
 cdat2 <- ddply(dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>%
                 tibble::rownames_to_column("mirna") %>% 
@@ -1583,8 +1649,8 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
                  colour = as.factor(classifier),
                  linetype = "dashed"),
              show.legend = FALSE) +
-  labs(title = paste(plotVar, "Denisty of CPM counts (30)"),
-       subtitle = "Smallest dCq",
+  labs(title = paste(plotVar, "Denisty of CPM counts (36)"),
+       subtitle = "Highest dCq",
        x = "log2 CPM Counts",
        y = "Density") +
   scale_fill_discrete(name = "Classifier \nStatus", labels = c("Non-Classifier", "Classifier")) +
@@ -1602,8 +1668,8 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
                  colour = as.factor(classifier),
                  linetype = "dashed"),
              show.legend = FALSE) +
-  labs(title = paste(plotVar, "Histogram of CPM counts (30)"),
-       subtitle = "Smallest dCq",
+  labs(title = paste(plotVar, "Histogram of CPM counts (36)"),
+       subtitle = "Highest dCq",
        x = "log2 CPM Counts",
        y = "Count") +
   scale_fill_discrete(name = "Classifier \nStatus", labels = c("Non-Classifier", "Classifier")) +
@@ -1612,7 +1678,7 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
 print(cdat2[2, 2] - cdat2[1, 2])
 ```
 
-## calculate the difference between the median of the distributions for all samples (36 classifier miRs)
+## calculate the difference between the median of the distributions for all samples (classifier with pregnancy kept in)
 
 ```{r calculate median difference all DE miRs}
 
@@ -1649,7 +1715,7 @@ unlist_distributionDifference_all <- do.call(cbind.data.frame, distributionDiffe
 
 ```{r}
 
-plotVar <- "PAC0048"
+plotVar <- "PAC0063"
 
 cdat3 <- ddply(dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>%
                 tibble::rownames_to_column("mirna") %>% 
@@ -1669,7 +1735,8 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
   mutate(., classifier = ifelse(mirna %in% combined_mirs_plus_pregnancy$SYMBOL, 1,
                                 ifelse(mirna %notin% combined_mirs_plus_pregnancy$SYMBOL, 0, NA))) %>% 
   ggplot(aes(x = get(plotVar),
-             fill = as.factor(classifier))) +
+             fill = as.factor(classifier)
+             )) +
   geom_histogram(alpha = 0.5, binwidth = 1) +
   geom_vline(data = cdat3,
              aes(xintercept = expression.median,
@@ -1677,8 +1744,8 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
              show.legend = FALSE) +
   geom_vline(xintercept = twentyFifth,
              linetype = "dotted") +
-  labs(title = paste(plotVar, "Histogram of CPM counts (16)"),
-       subtitle = "dCq = 7",
+  labs(title = paste(plotVar, "Histogram of CPM counts (18)"),
+       subtitle = "dCq = smallest",
        x = "log2 CPM Counts",
        y = "Count") +
   scale_fill_discrete(name = "Classifier \nStatus", labels = c("Non-Classifier", "Classifier")) +
@@ -1698,6 +1765,209 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
 
 print(cdat3[2, 2] - twentyFifth)
                                     
+
+```
+
+# plot the y intercept difference against the distribution difference values - classifiers only
+
+```{r}
+
+# here 
+plotData_y_intVdistDiff <- as.data.frame(unlist(y_int_diff_classifier)) %>%
+  set_colnames("y_int_diff_classifier") %>% 
+  tibble::rownames_to_column("samplename") 
+plotData_y_intVdistDiff$samplename <- gsub(".classifier", "", plotData_y_intVdistDiff$samplename)
+plotData_y_intVdistDiff <- left_join(plotData_y_intVdistDiff, unlist_distributionDifference, by = "samplename") %>% 
+  left_join(., DGElist_plasma$samples[, c("samplename", "haemolysis", "miR23a.miR451a")], by = "samplename")
+
+ggplot(data = plotData_y_intVdistDiff,
+       aes(y = y_int_diff_classifier,
+           x = distributionDifference,
+           colour = miR23a.miR451a,
+           label = samplename,
+           size = 6)) +
+  scale_color_viridis(discrete = FALSE,
+                      option = "magma",
+                      direction = -1) +
+  scale_size(guide = "none") +
+  geom_point() +
+  # show a tick mark every 1 from -5 t0 10
+  scale_x_continuous(name = "Distribution Difference (classifier median - all other median)",
+                     breaks = seq(-5, 10, 1)) +
+  # add samplenames to the samples that are inside the haemolysis limits but not over dCq 7
+  geom_text_repel(data = filter(plotData_y_intVdistDiff,
+                                haemolysis == "none" &
+                                  y_int_diff_classifier >= aggregate(y_int_diff_classifier ~ haemolysis,
+                                                                     plotData_y_intVdistDiff,
+                                                                     function(x) min(x))[2, 2] &
+                    distributionDifference >= aggregate(distributionDifference ~ haemolysis,
+                                                       plotData_y_intVdistDiff,
+                                                       function(x) min(x))[2, 2]),
+                  box.padding = 1,
+                  aes(label = samplename)) +
+# put a red circle around the samples that are classified as haemolysised based on dCq
+  geom_encircle(aes(y = y_int_diff_classifier,
+                    x = distributionDifference), 
+                data = plotData_y_intVdistDiff[plotData_y_intVdistDiff$haemolysis == "haemolysed", ], 
+                color = "red", 
+                size = 2, 
+                expand = 0.03) +
+  # put a blue circle around the samples that are inside the haemolysis limits but not over dCq 7
+  geom_encircle(aes(y = y_int_diff_classifier,
+                    x = distributionDifference),
+                data = filter(plotData_y_intVdistDiff,
+                                     haemolysis == "none" &
+                                       y_int_diff_classifier >= aggregate(y_int_diff_classifier ~ haemolysis,
+                                                                          plotData_y_intVdistDiff,
+                                                                          function(x) min(x))[2, 2] &
+                                       distributionDifference >= aggregate(distributionDifference ~ haemolysis,
+                                                                           plotData_y_intVdistDiff,
+                                                                           function(x) min(x))[2, 2]),
+                color = "blue",
+                size = 2,
+                expand = 0.02) +
+  theme_bw()
+```
+
+# plot the y intercept difference against the distribution difference values - all DE (up) miRs
+
+```{r}
+
+## here y_int_diff uses all DE up miRs versus everything else
+plotData_y_intVdistDiff_all <- as.data.frame(unlist(y_int_diff)) %>%
+  set_colnames("y_int_diff") %>% 
+  tibble::rownames_to_column("samplename") 
+plotData_y_intVdistDiff_all$samplename <- gsub(".hemo1", "", plotData_y_intVdistDiff_all$samplename)
+plotData_y_intVdistDiff_all <- left_join(plotData_y_intVdistDiff_all, unlist_distributionDifference_all, by = "samplename") %>% 
+  left_join(., DGElist_plasma$samples[, c("samplename", "haemolysis", "miR23a.miR451a")], by = "samplename")
+
+ggplot(data = plotData_y_intVdistDiff_all,
+       aes(y = y_int_diff,
+           x = distributionDifference,
+           colour = miR23a.miR451a,
+           label = samplename,
+           size = 6)) +
+  scale_color_viridis(discrete = FALSE,
+                      option = "magma",
+                      direction = -1) +
+  scale_size(guide = "none") +
+  geom_point() +
+  # show a tick mark every 1 from -5 t0 10
+  scale_x_continuous(name = "Distribution Difference (DE miRs median - all other median)",
+                     breaks = seq(-5, 10, 1)) +
+  # add samplenames to the samples that are inside the haemolysis limits but not over dCq 7
+  geom_text_repel(data = filter(plotData_y_intVdistDiff_all,
+                                haemolysis == "none" &
+                                  y_int_diff >= aggregate(y_int_diff ~ haemolysis,
+                                                                     plotData_y_intVdistDiff_all,
+                                                                     function(x) min(x))[2, 2] &
+                                  distributionDifference >= aggregate(distributionDifference ~ haemolysis,
+                                                                      plotData_y_intVdistDiff_all,
+                                                                      function(x) min(x))[2, 2]),
+                  box.padding = 1,
+                  aes(label = samplename)) +
+  # put a red circle around the samples that are classified as haemolysised based on dCq
+  geom_encircle(aes(y = y_int_diff,
+                    x = distributionDifference), 
+                data = plotData_y_intVdistDiff_all[plotData_y_intVdistDiff_all$haemolysis == "haemolysed", ], 
+                color = "red", 
+                size = 2, 
+                expand = 0.03) +
+  # put a blue circle around the samples that are inside the haemolysis limits but not over dCq 7
+  geom_encircle(aes(y = y_int_diff,
+                    x = distributionDifference),
+                data = filter(plotData_y_intVdistDiff_all,
+                              haemolysis == "none" &
+                                y_int_diff >= aggregate(y_int_diff ~ haemolysis,
+                                                                   plotData_y_intVdistDiff_all,
+                                                                   function(x) min(x))[2, 2] &
+                                distributionDifference >= aggregate(distributionDifference ~ haemolysis,
+                                                                    plotData_y_intVdistDiff_all,
+                                                                    function(x) min(x))[2, 2]),
+                color = "blue",
+                size = 2,
+                expand = 0.02) +
+  geom_vline(xintercept = 1,
+             linetype = "dotted") +
+  geom_hline(yintercept = 1,
+             linetype = "dotted") +
+  theme_bw()
+```
+
+## plot distribution difference versus dCq
+
+```{r plot distribution difference versus dCq}
+
+# only include the final classifier miRs (ie take the pregnancy ones out)
+ggplot(data = plotData_y_intVdistDiff,
+       aes(x = .data$miR23a.miR451a,
+           y = .data$distributionDifference,
+           # colour = .data$miR23a.miR451a,
+           label = .data$samplename,
+           size = 6)) +
+  scale_size(guide = "none") +
+  geom_vline(xintercept = 7,
+             linetype = "dotted") +
+  geom_hline(yintercept = min(
+    filter(plotData_y_intVdistDiff, haemolysis == "haemolysed")[, "distributionDifference"]),
+             linetype = "dotted") +
+  # add samplenames to the samples that are inside the haemolysis limits but not over dCq 7
+  geom_text_repel(data = filter(plotData_y_intVdistDiff,
+                                haemolysis == "none" &
+                    distributionDifference >= aggregate(distributionDifference ~ haemolysis,
+                                                       plotData_y_intVdistDiff,
+                                                       function(x) min(x))[2, 2]),
+                  box.padding = 1,
+                  aes(label = samplename)) +
+  geom_point(aes(colour = cut(.data$miR23a.miR451a, c(-Inf, 6, 6.99, Inf)))) +
+  scale_color_manual(name = "dCq",
+                     values = c("(-Inf,6]" = "black",
+                                  "(6,6.99]" = "yellow",
+                                  "(6.99, Inf]" = "red"),
+                     labels = c("<= 6", "6 < dCq < 7", ">= 7")) +
+
+  # show a tick mark every 1 from -5 t0 10
+  scale_x_continuous(name = "dCq (miR23a-miR451a)",
+                     breaks = seq(-5, 10, 0.5)) +
+    labs(title = "Distribution difference using final classifiers",
+       subtitle = "ie take pregnant out") +
+  theme_bw(base_size = 16)
+
+
+# include all classifier miRs (ie keep the pregnancy ones in)
+ggplot(data = plotData_y_intVdistDiff_all,
+       aes(x = .data$miR23a.miR451a,
+           y = .data$distributionDifference,
+           # colour = .data$miR23a.miR451a,
+           label = .data$samplename,
+           size = 6)) +
+  scale_size(guide = "none") +
+  geom_vline(xintercept = 7,
+             linetype = "dotted") +
+  geom_hline(yintercept = min(
+    filter(plotData_y_intVdistDiff_all, haemolysis == "haemolysed")[, "distributionDifference"]),
+             linetype = "dotted") +
+  # add samplenames to the samples that are inside the haemolysis limits but not over dCq 7
+  geom_text_repel(data = filter(plotData_y_intVdistDiff_all,
+                                haemolysis == "none" &
+                    distributionDifference >= aggregate(distributionDifference ~ haemolysis,
+                                                       plotData_y_intVdistDiff_all,
+                                                       function(x) min(x))[2, 2]),
+                  box.padding = 1,
+                  aes(label = samplename)) +
+  geom_point(aes(colour = cut(.data$miR23a.miR451a, c(-Inf, 6, 6.99, Inf)))) +
+  scale_color_manual(name = "dCq",
+                     values = c("(-Inf,6]" = "black",
+                                  "(6,6.99]" = "yellow",
+                                  "(6.99, Inf]" = "red"),
+                     labels = c("<= 6", "6 < dCq < 7", ">= 7")) +
+
+  # show a tick mark every 1 from -5 t0 10
+  scale_x_continuous(name = "dCq (miR23a-miR451a)",
+                     breaks = seq(-5, 10, 0.5)) +
+  labs(title = "Distribution difference using all classifiers",
+       subtitle = "ie keep pregnant in") +
+  theme_bw(base_size = 16)
 
 ```
 
@@ -1773,6 +2043,146 @@ ggplot(cohort_meta, aes(x = CohortCode,
   ) +
   geom_point(data = cohort_meta[cohort_meta$haemolysis != "none",], color = "red") +
   theme_bw()
+
+```
+
+# SVM - e0107
+
+```{r SVM e0107}
+
+# ## SVM in R
+# 
+# dataset <- full_join(DGElist_plasma$samples[, c("samplename", "haemolysis")],
+#                      as.data.frame(t(cpm(DGElist_plasma$counts, log = TRUE) %>%
+#                                     subset(., rownames(.) %in% combined_mirs_plus_pregnancy$SYMBOL))) %>%
+#                        tibble::rownames_to_column("samplename"),
+#                      by = "samplename") %>% 
+#   tibble::column_to_rownames("samplename")
+# 
+#  
+# index <- 1:nrow(dataset)
+# 
+# testindex <- sample(index, trunc(length(index)*30/100))
+# 
+# testset <- dataset[testindex,]
+# # testset$haemolysis <- factor(testset$haemolysis, levels = c("none", "haemolysed"))
+# 
+# trainset <- dataset[-testindex,]                    
+# # trainset$haemolysis <- factor(trainset$haemolysis, levels = c("none", "haemolysed"))
+# 
+# tuned <- tune.svm(haemolysis~., data = trainset, gamma = 10^(-6:-1), cost = 10^(-1:1))
+# 
+# summary(tuned)
+# 
+# # In order to build a svm model to predict breast cancer using C=10 and gamma=0.01,
+# # which were the best values according the tune() function
+# model  <- svm(haemolysis~., data = trainset, kernel = "linear", gamma = 0.01, cost = 10)
+# 
+# # To see the results of the model, as the number of support vectors is necessary type:
+#   
+# summary(model)
+# 
+# # # tune the model
+# # model <- best.svm(dat, labels, cost = c(0.1, 1, 10), kernel = "linear", tunecontrol = tune.control())
+# 
+# # Now we run the model again the test set to predict classes (-1 removes the classification column)
+# prediction <- predict(model, testset[,-1])
+# 
+# # to produce the confusion matrix
+# tab <- table(pred = prediction, true = testset[,1])
+# 
+# print(tab)
+
+```
+
+# SVM - caret
+
+```{r SVM caret}
+
+# lets get the counts data into the format we need for SVM
+dataset <- full_join(DGElist_plasma$samples[, c("samplename", "haemolysis")],
+                     as.data.frame(t(cpm(DGElist_plasma$counts, log = TRUE) %>%
+                                       subset(., rownames(.) %in% combined_mirs_plus_pregnancy$SYMBOL))) %>%
+                       tibble::rownames_to_column("samplename"),
+                     by = "samplename") %>% 
+  tibble::column_to_rownames("samplename")
+
+# now we can split into training and testing data
+# y indicates the condition & ensures haemo and none in both sets
+# p indicates the split (here 70:30)
+intrain <- createDataPartition(y = dataset$haemolysis,
+                               p = 0.7,
+                               list = FALSE)
+
+# create the training set
+training <- dataset[intrain,]
+# create the testing set
+testing <- dataset[-intrain,]
+
+# set up the resampling method
+trctrl <- trainControl(method = "repeatedcv", # repeated cross validation
+                       number = 10,
+                       repeats = 3,
+                       classProbs = TRUE,
+                       summaryFunction = twoClassSummary)
+
+# train the model
+svm_pls_fit <- train(haemolysis ~.,
+                        data = training,
+                        method = "pls",
+                        trControl = trctrl,
+                        preProcess = c("center", "scale"),
+                        tuneLength = 10,
+                        metric = "ROC")
+
+print(svm_pls_fit)
+
+ggplot(svm_pls_fit)
+
+# Print the best tuning parameter sigma and C that
+# maximizes model accuracy
+svm_pls_fit$bestTune
+
+#save the results for later
+res_pls_fit <- as_tibble(svm_pls_fit$results[which.max(svm_pls_fit$results[,2]),])
+res_pls_fit
+
+# predict the class of samples in the testing set
+pls_pred_class <- predict(svm_pls_fit,
+                     newdata = testing)
+
+pls_pred_class
+
+# Compute model accuracy rate
+mean(pls_pred_class == testing$haemolysis)
+
+# calculate the probability of each sample belonging to each class
+pls_pred_probs <- predict(svm_pls_fit,
+                         newdata = testing,
+                         type = "prob")
+head(pls_pred_probs)
+
+
+confusionMatrix(pls_pred_class, testing$haemolysis)
+
+# test a single new sample
+single_sample <- testing[1, ]
+
+# predict the class of single sample
+pls_pred_single <- predict(svm_pls_fit,
+                          newdata = single_sample)
+
+print(pls_pred_single)
+
+# compute the confusion matrix
+confusionMatrix(pls_pred_single, single_sample$haemolysis)
+
+# calculate the probability of individual sample belonging to each class
+pls_pred_probs_single <- predict(svm_pls_fit,
+                                 newdata = single_sample,
+                                 type = "prob")
+# report result
+print(pls_pred_probs_single)
 
 
 
