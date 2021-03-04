@@ -504,7 +504,7 @@ par(mfrow=c(1,1))
 
 # colour by haemolysis
 col.hemo <- DGElist_plasma$samples$haemolysis
-levels(col.hemo) <- brewer.pal(nlevels(col.hemo), "Set2")
+levels(col.hemo) <- brewer.pal(nlevels(col.hemo), "Set3")
 col.hemo <- as.character(col.hemo)
 
 plot(density(rawlcpm_plasma[,1]), col = col.hemo[1], lwd = 2, ylim = c(0, 0.80), las = 2,
@@ -535,6 +535,9 @@ par(mfrow=c(1,1))
 # Distribution of normalised and filtered counts data
 boxplot(cpm(DGElist_plasma, log = TRUE), las = 2, col = col, main = "")
 title(main = "DGEList_plasma: Normalised data",ylab = "Log-cpm")
+
+saveRDS(DGElist_plasma$counts, here("cleanData/normCounts.rds"))
+
 ```
 
 ## MDS of filtered and TMM normalised counts
@@ -1358,6 +1361,8 @@ pheatmap(subset(centred_haemo_up, rownames(centred_haemo_up) %in% top_DE_classif
 combined_mirs_plus_pregnancy <- left_join(top_DE_classifier, topTable_pregnancy_noHaemo, by = "SYMBOL") %>% 
   .[!complete.cases(.),]
 
+
+
 # heatmap of remaining miRs.
 subset(centred_haemo_up, rownames(centred_haemo_up) %in% combined_mirs_plus_pregnancy$SYMBOL) %>%
   pheatmap(annotation_col = a,
@@ -1632,6 +1637,7 @@ dplyr::select(as.data.frame(cpm(DGElist_plasma$counts, log = TRUE)), plotVar) %>
   theme_bw(base_size = 16) 
 
 print(cdat[2, 2] - cdat[1, 2])
+
 ```
 
 ## calculate the difference between the geometric mean of the distributions for
@@ -1697,6 +1703,8 @@ plotData_disDiff_dCq <- full_join(
   )
   )
 
+write_delim(plotData_disDiff_dCq, here("shinyVamp/inputData/plotData_distDiff_dCq.csv"), delim = ",")
+
 # only include the final classifier miRs (ie take the pregnancy ones out)
 ggplot(data = plotData_disDiff_dCq,
        aes(x = .data$miR23a.miR451a,
@@ -1707,12 +1715,12 @@ ggplot(data = plotData_disDiff_dCq,
   scale_size(guide = "none") +
   geom_vline(xintercept = 7,
              linetype = "dotted") +
-  geom_hline(yintercept = 1.8,
+  geom_hline(yintercept = 1.9,
     linetype = "dotted") +
   geom_rect(
     xmin = -Inf,
     xmax = Inf, 
-    ymin = 1.8,
+    ymin = 1.9,
     ymax = 2,
     fill = "grey",
     alpha = 0.5,
@@ -1722,10 +1730,11 @@ ggplot(data = plotData_disDiff_dCq,
     ) +
   geom_point() +
   scale_colour_manual(breaks = c("noDetection", "haemolysed", "borderline"), 
-                       values=c("black", "darkRed", "darkGrey")) +
+                       values=c("black", "darkRed", "darkGrey"),
+                      labels = c("No Detection", "Haemolysed", "Borderline")) +
   geom_text_repel(data = filter(plotData_disDiff_dCq,
                   haemolysis == "none" &
-                  distributionDifference >= 2),
+                  distributionDifference >= 1.9),
     box.padding = 1,
     aes(label = samplename),
     show.legend = FALSE
@@ -1743,7 +1752,10 @@ ggplot(data = plotData_disDiff_dCq,
                      breaks = seq(-5, 10, 1)) +
   labs(
       title = "Distribution difference using final classifiers",
-      subtitle = "based on three classification groups"
+      # subtitle = "based on three classification groups",
+      x = "dCq (miR23a-miR451a)",
+      y = "Distribution Difference",
+      colour = "Classification"
       ) +
   theme_bw(base_size = 16)
 
