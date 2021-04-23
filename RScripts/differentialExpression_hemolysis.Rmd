@@ -414,6 +414,7 @@ rank <- as.data.frame(colSums(expression)) %>%
               mutate(., rank_unique = 1:nrow(.)),
             by = "samplename")
 
+png(filename="mature_miRNA.png",width=8,height=6,units="in",res=300)
 ggplot(data = rank,
        aes(x = readCounts,
            y = unique_miRs,
@@ -426,11 +427,19 @@ ggplot(data = rank,
                      breaks = seq(1000000, 19000000, 1500000)) +
   scale_y_continuous(name = "Mature miRNA Identified",
                      breaks = seq(250, 800, 50)) +
-  stat_smooth(method = 'loess',
+  scale_colour_manual(values = c("black", "darkRed"),
+                      labels = c("miR-23a-miR-451 \U003C 7",
+                                 "miR-23a-miR-451 \U2265 7")) +
+  labs(colour = paste("Haemolysis", "(","\U0394","Cq",")", sep="")) +
+  stat_smooth(method = 'lm',
               se = FALSE,
               size = 2) +
   theme_bw(base_size = 16) +
-  theme(axis.text.x = element_text(angle = 270, hjust = 1))
+  theme(axis.text.x = element_text(angle = 270, hjust = 1),
+        axis.title.x = element_text(vjust=-1),
+        legend.position = "bottom")
+graphics.off()
+
   
 ## test to see if the difference is significant
 haemolysis_anova <- aov(readCounts ~ unique_miRs * haemolysis,
@@ -1661,8 +1670,7 @@ distributionDifference <- lapply(varc, function(x){
   cdat <- ddply(
     dplyr::select(
       as.data.frame(
-        cpm(
-          DGElist_plasma$counts, log = TRUE)), x) %>%
+        cpm(DGElist_plasma$counts, log = TRUE)), x) %>%
       tibble::rownames_to_column("mirna") %>% 
       mutate(., classifier = as.factor(ifelse(mirna %in% combined_mirs_plus_pregnancy$SYMBOL, 1,
                                               ifelse(mirna %in% dropped$SYMBOL, 2,
@@ -1700,12 +1708,14 @@ plotData_disDiff_dCq <- full_join(
         NA
       )
     )
-  )
-  )
+  ))
 
-write_delim(plotData_disDiff_dCq, here("shinyVamp/inputData/plotData_distDiff_dCq.csv"), delim = ",")
+correlationTest <- cor.test(plotData_distDiff_dCq$distributionDifference,plotData_distDiff_dCq$miR23a.miR451a, method=c("pearson"))
+
+# write_delim(plotData_disDiff_dCq, here("shinyVamp/inputData/plotData_distDiff_dCq.csv"), delim = ",")
 
 # only include the final classifier miRs (ie take the pregnancy ones out)
+png(file="correlation.png",width=8,height=6,units="in",res=300)
 ggplot(data = plotData_disDiff_dCq,
        aes(x = .data$miR23a.miR451a,
            y = .data$distributionDifference,
@@ -1748,16 +1758,18 @@ ggplot(data = plotData_disDiff_dCq,
   #                 aes(label = samplename)) +
   
   # show a tick mark every 1 from -5 t0 10
-  scale_x_continuous(name = "dCq (miR23a-miR451a)",
+  scale_x_continuous(name = paste("\U0394", "Cq (miR23a-miR451a)",sep=""),
                      breaks = seq(-5, 10, 1)) +
   labs(
-      title = "Distribution difference using final classifiers",
+      # title = "Distribution difference using final classifiers",
       # subtitle = "based on three classification groups",
-      x = "dCq (miR23a-miR451a)",
+      x = paste("\U0394", "Cq (miR23a-miR451a)",sep=""),
       y = "Distribution Difference",
-      colour = "Classification"
+      colour = paste("\U0394", "Cq (miR23a-miR451a) ",sep="")
       ) +
-  theme_bw(base_size = 16)
+  theme_bw(base_size = 16) +
+    theme(legend.position = "bottom")
+graphics.off()
 
 # plot as density side by side
 ggplot(data = plotData_disDiff_dCq) +
@@ -1770,13 +1782,17 @@ ggplot(data = plotData_disDiff_dCq) +
     alpha = 0.5,
     lwd = 0.8
     ) +
+  scale_colour_manual(values = c("#96CDCD", "#8B0000")) +
   labs(
-    title = "Distribution difference using final classifiers",
-    subtitle = "based on three classification groups"
+    # title = "Distribution difference using final classifiers",
+    # subtitle = "based on three classification groups",
+    legend = "Haemolysis metric"
     ) +
+  theme(legend.position = "bottom") +
   theme_bw(base_size = 16)
 
 # plot as histogram side by side
+png(file="distribution.png",width=8,height=6,units="in",res=300)
 ggplot(
   data = plotData_disDiff_dCq,
   aes(
@@ -1792,12 +1808,25 @@ ggplot(
     alpha = 0.6, 
     position = "identity",
     lwd = 0.8) +
+  scale_fill_manual(values = c("black", "darkRed"),
+                    name = paste("\U0394", "Cq (miR23a-miR451a)",sep=""),
+                    labels = c(paste("\U0394", "Cq (miR23a-miR451a) ","\U003C 7",sep=""),
+                               paste("\U0394", "Cq (miR23a-miR451a) ","\U2265 7",sep=""))) +
+  scale_colour_manual(values = c("black", "darkRed"),
+                      name = paste("\U0394", "Cq (miR23a-miR451a)",sep=""),
+                      labels = c(paste("\U0394", "Cq (miR23a-miR451a) ","\U003C 7",sep=""),
+                                 paste("\U0394", "Cq (miR23a-miR451a) ","\U2265 7",sep=""))) +
   scale_y_continuous(labels = percent_format()) +
   labs(
-    title = "Distribution difference using final classifiers",
-    subtitle = "based on three classification groups"
+    # title = "Distribution difference using final classifiers",
+    # subtitle = "based on three classification groups",
+    x="Distribution Difference",
+    y="Density",
+    legend = "Haemolysis metric"
     ) +
-  theme_bw(base_size = 16)
+  theme_bw(base_size = 16) +
+    theme(legend.position = "bottom")
+graphics.off()
 
 ```
 
